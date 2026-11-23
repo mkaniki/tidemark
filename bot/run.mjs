@@ -22,8 +22,10 @@ function runStrategy(raw) {
   const B = { t: raw.map(r => r[0]), o: raw.map(r => r[1]), h: raw.map(r => r[2]), l: raw.map(r => r[3]), c: raw.map(r => r[4]), v: raw.map(r => r[5]) }
   let res; ctx.postMessage = m => { res = m }
   ctx.RUN({ data: { bars: B, code: fs.readFileSync(path.join(dir, 'strategy.js'), 'utf8'), inputs: {
-    'Sizing': cfg.sizing || 'Growth: 3% risk, 50% weekly', 'Bitunix futures balance for alert sizing (USDT, 0 = off)': +(env.BALANCE || cfg.balance || 0),
-    'Bitunix leverage setting': +(cfg.leverage || 85) } } })
+    'Sizing': cfg.sizing || 'Growth: 3% risk, 50% weekly', 'Custom risk per trade % (4H and 1H parts)': +(cfg.customRisk ?? 3), 'Custom long-term position size (% of balance)': +(cfg.customWeekly ?? 50),
+    'Use 4H algo': cfg.use4h !== false, 'Use 1H leg breakouts': cfg.use1h !== false, 'Use long-term part (weekly or monthly)': cfg.useWeekly !== false,
+    'Alert when a trailing stop moves at least %': +(cfg.stopMoveMinPct ?? 0.5),
+    'Bitunix futures balance for alert sizing (USDT, 0 = off)': +(env.BALANCE || cfg.balance || 0), 'Bitunix leverage setting': +(cfg.leverage || 85) } } })
   if (!res || res.error) throw new Error('Strategy error: ' + (res && res.error)); return { B, res }
 }
 // ---- alert wording (same as the app) ----
@@ -60,7 +62,9 @@ const statePath = path.join(root, 'docs', 'state.json'), statusPath = path.join(
 const state = fs.existsSync(statePath) ? JSON.parse(fs.readFileSync(statePath, 'utf8')) : {}
 const raw = await bars(); const { B, res } = runStrategy(raw); const n = B.t.length, lastClosed = B.t[n - 1]
 const since = env.REPLAY_SINCE ? Date.parse(env.REPLAY_SINCE) : (state.lastBar ?? lastClosed)   // first run: no backlog
-const fresh = res.bt.events.filter(e => e.t > since && e.t <= lastClosed && ['signal', 'stop_move', 'sl', 'exit', 'tp'].includes(e.type) )
+const AL = Object.assign({ entries: true, stops: true, exits: true, stopMoves: true }, cfg.alerts || {})
+const wanted = e => e.type === 'signal' ? AL.entries : e.type === 'sl' ? AL.stops : (e.type === 'exit' || e.type === 'tp') ? AL.exits : e.type === 'stop_move' ? AL.stopMoves : false
+const fresh = cfg.paused ? [] : res.bt.events.filter(e => e.t > since && e.t <= lastClosed && wanted(e))
 const log = fs.existsSync(logPath) ? JSON.parse(fs.readFileSync(logPath, 'utf8')) : []
 for (const e of fresh) { const w = words(res.bt, e); if (!w) continue; await send(w[0], w[1]); log.unshift({ t: Date.now(), bar: e.t, title: w[0], body: w[1] }) }
 if (env.TEST_ALERT === '1') await send('TEST · Tidemark cloud bot', 'If you can read this on your phone, alerts are working.')
@@ -69,6 +73,8 @@ if (!env.REPLAY_SINCE) {
   fs.writeFileSync(statePath, JSON.stringify({ lastBar: lastClosed }, null, 1))
   fs.writeFileSync(logPath, JSON.stringify(log.slice(0, 50), null, 1))
   fs.writeFileSync(statusPath, JSON.stringify({ checked: Date.now(), lastBar: lastClosed, price: B.c[n - 1], sizing: cfg.sizing,
+    paused: !!cfg.paused, parts: { '4H': cfg.use4h !== false, '1H': cfg.use1h !== false, Weekly: cfg.useWeekly !== false },
     positions: res.bt.opens.map(o => ({ part: o.sleeve, side: side(o.dir), since: o.et, entry: o.ep, stop: o.stop, unrealisedPct: o.dir * (B.c[n - 1] / o.ep - 1) * 100 })) }, null, 1))
 }
+if (cfg.paused) console.log('Bot is paused in settings: no alerts sent.')
 console.log(`\nChecked ${SYMBOL} up to ${new Date(lastClosed + H).toISOString()} · ${fresh.length} new alert(s) · open: ${res.bt.opens.map(o => o.sleeve + ' ' + side(o.dir)).join(', ') || 'none'}`)

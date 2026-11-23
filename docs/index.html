@@ -286,6 +286,12 @@ table.t{width:100%;border-collapse:collapse;font-size:13px}
   <div class="form" id="setF"></div>
   <div class="dlgf"><button class="btn ghost" id="setDef">Defaults</button><span style="flex:1"></span><button class="btn ghost" data-close>Cancel</button><button class="btn" id="setOk">OK</button></div>
 </div></div>
+<div class="modal" id="botM"><div class="dlg" role="dialog" aria-label="Bot settings">
+  <div class="dlgh"><h3>Bot settings</h3><button data-close aria-label="Close">×</button></div>
+  <div class="form" id="bsF" style="grid-template-columns:1fr 150px"></div>
+  <div class="dlgf" style="flex-wrap:wrap"><button class="btn ghost" id="bsTest">Send test alert</button><button class="btn ghost" id="bsRun">Check now</button><span style="flex:1"></span><button class="btn ghost" data-close>Cancel</button><button class="btn" id="bsSave">Save</button></div>
+  <div class="empty" id="bsMsg" style="padding:0 16px 12px"></div>
+</div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1484,12 +1490,60 @@ async function loadBot(){
   try{const r=await fetch('alerts.json?'+Date.now(),{cache:'no-store'});if(r.ok)al=await r.json()}catch(e){}
   const late=Date.now()-st.checked>2.5*36e5;
   $('#botBox').hidden=false;$('#botChip').hidden=false;$('#botChip').className='tb '+(late?'bad':'ok');$('#botChip').textContent=(late?'Bot late':'Bot ✓')+' · '+(st.positions.length?st.positions.length+' open':'flat');
-  $('#bot').innerHTML=`<div class="st">Last check <b>${ago(st.checked)}</b> · BTC ${fp(st.price)} · ${esc(st.sizing||'')}${st.balance?` · balance ${money(st.balance)}`:''}</div>${late?'<div class="warn">The bot hasn’t checked in over 2 hours. Open your GitHub repo → Actions to see why.</div>':''}`+
-    (st.positions.length?st.positions.map(p=>`<div class="pos"><b>${esc(p.part)} · ${p.side}</b><b class="${p.unrealisedPct>=0?'up':'dn'}">${p.unrealisedPct>=0?'+':''}${p.unrealisedPct.toFixed(2)}% price move</b><span>since ${fdate(p.since)} @ ${fp(p.entry)}</span><span>${p.stop?'stop '+fp(p.stop):'no stop'}</span></div>`).join(''):'<div class="pos"><span>No open positions. Waiting for the next signal.</span></div>');
+  $('#bot').innerHTML=`${st.paused?'<div class="warn">Alerts are paused in Bot settings.</div>':''}<div class="st">Last check <b>${ago(st.checked)}</b> · BTC ${fp(st.price)} · ${esc(st.sizing||'')}${st.balance?` · balance ${money(st.balance)}`:''}</div>${late?'<div class="warn">The bot hasn’t checked in over 2 hours. Open your GitHub repo → Actions to see why.</div>':''}`+
+    (st.positions.length?st.positions.map(p=>`<div class="pos"><b>${esc(p.part)} · ${p.side}</b><b class="${p.unrealisedPct>=0?'up':'dn'}">${p.unrealisedPct>=0?'+':''}${p.unrealisedPct.toFixed(2)}% price move</b><span>since ${fdate(p.since)} @ ${fp(p.entry)}</span><span>${p.stop?'stop '+fp(p.stop):'no stop'}</span></div>`).join(''):'<div class="pos"><span>No open positions. Waiting for the next signal.</span></div>')+`<button class="btn ghost" id="bsOpen" style="margin-top:10px;width:100%">Bot settings</button>`;
+  $('#bsOpen').addEventListener('click',openBotSettings);
   for(const a of al.slice().reverse())if(!S.alog.some(x=>x.t===a.t&&x.title===a.title)){S.alog.unshift({t:a.t,title:a.title,body:a.body})}
   S.alog.sort((x,y)=>y.t-x.t);S.alog.length=Math.min(S.alog.length,50);renderAlog();
 }
 $('#botChip').addEventListener('click',e=>{e.stopPropagation();$('#side').classList.add('open');$('#side').scrollTop=0});
+
+/* ---------- bot settings (edits config.json + BALANCE in your GitHub repo) ---------- */
+const GH=(()=>{const m=location.hostname.match(/^([^.]+)\.github\.io$/i),seg=location.pathname.split('/').filter(Boolean)[0];return{owner:m?m[1]:store.get('ghOwner',''),repo:m?(seg||m[1]+'.github.io'):store.get('ghRepo','')}})();
+let bsCfg=null,bsSha=null;
+const ghTok=()=>store.get('ghtoken','');
+async function gh(path,opts={}){const r=await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}${path}`,Object.assign({},opts,{headers:Object.assign({Authorization:'Bearer '+ghTok(),Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},opts.body?{'Content-Type':'application/json'}:{})}));
+  if(!r.ok){let m='';try{m=(await r.json()).message}catch(e){}throw new Error(`${r.status} ${m||r.statusText}`)}return r.status===204?null:r.json()}
+const b64d=s=>decodeURIComponent(escape(atob(s.replace(/\n/g,'')))),b64e=s=>btoa(unescape(encodeURIComponent(s)));
+const bsMsg=(t,cls='')=>{$('#bsMsg').innerHTML=`<span class="${cls}">${t}</span>`};
+const tokenLink=()=>`https://github.com/settings/personal-access-tokens/new?name=Tidemark+app&description=Lets+the+Tidemark+app+change+bot+settings&target_name=${encodeURIComponent(GH.owner)}&expires_in=365&contents=write&actions=write&variables=write`;
+async function openBotSettings(){
+  $('#botM').classList.add('open');const F=$('#bsF');
+  if(!ghTok()){F.innerHTML=`<h4>Connect the app to your bot</h4><p style="grid-column:1/-1;margin:0;color:var(--mute)">The app needs a GitHub key that can only edit <b>${esc(GH.owner)}/${esc(GH.repo)}</b>. It's stored on this device only.</p>
+    <ol style="grid-column:1/-1;margin:4px 0;padding-left:18px;color:var(--mute);line-height:1.6"><li><a href="${tokenLink()}" target="_blank" rel="noopener">Open GitHub's new-token page</a></li><li>Repository access: <b>Only select repositories → ${esc(GH.repo)}</b></li><li>Permissions: <b>Contents</b>, <b>Actions</b> and <b>Variables</b> → Read and write</li><li>Generate token, copy it, paste it below</li></ol>
+    <label for="bsTok">GitHub token</label><input type="password" id="bsTok" autocomplete="off" spellcheck="false" placeholder="github_pat_…">`;
+    $('#bsSave').textContent='Connect';bsMsg('');return}
+  $('#bsSave').textContent='Save';F.innerHTML='<div class="empty" style="grid-column:1/-1">Loading your settings…</div>';
+  try{const f=await gh('/contents/config.json');bsSha=f.sha;bsCfg=JSON.parse(b64d(f.content));let bal='';try{bal=(await gh('/actions/variables/BALANCE')).value}catch(e){}
+    const c=bsCfg,al=Object.assign({entries:true,stops:true,exits:true,stopMoves:true},c.alerts||{}),ck=(id,v,l)=>`<label for="${id}">${l}</label><div class="pc"><input type="checkbox" id="${id}" ${v?'checked':''}></div>`;
+    F.innerHTML=`<h4>Account</h4><label for="bsBal">Bitunix futures balance (USDT)</label><input type="number" id="bsBal" step="any" min="0" value="${esc(bal)}">
+      <label for="bsLev">Bitunix leverage setting</label><input type="number" id="bsLev" min="1" value="${c.leverage??85}">
+      <h4>Sizing</h4><label for="bsSz">Preset</label><select id="bsSz">${['Growth: 3% risk, 50% weekly','Balanced: 2.5% risk, 25% weekly','Custom: use the two settings below'].map(o=>`<option ${o===c.sizing?'selected':''}>${o}</option>`).join('')}</select>
+      <label for="bsR">Custom risk per trade %</label><input type="number" id="bsR" step="0.1" min="0.1" value="${c.customRisk??3}">
+      <label for="bsW">Custom weekly size % of balance</label><input type="number" id="bsW" step="1" min="0" value="${c.customWeekly??50}">
+      <h4>Strategy parts</h4>${ck('bs4',c.use4h!==false,'4H algo')}${ck('bs1',c.use1h!==false,'1H leg breakouts')}${ck('bsWk',c.useWeekly!==false,'Weekly both sides')}
+      <h4>Alerts</h4>${ck('bsAe',al.entries,'Entries')}${ck('bsAs',al.stops,'Stop hits')}${ck('bsAx',al.exits,'Exits')}${ck('bsAm',al.stopMoves,'Stop moves')}
+      <label for="bsMin">…only stop moves of at least %</label><input type="number" id="bsMin" step="0.1" min="0" value="${c.stopMoveMinPct??0.5}">
+      <h4>Bot</h4>${ck('bsP',!!c.paused,'Pause all alerts')}
+      <p style="grid-column:1/-1;margin:4px 0 0;color:var(--mute)">Changes apply from the bot's next hourly check, or right away with “Check now”. <a href="#" id="bsForget">Disconnect this device</a></p>`;
+    bsMsg('');$('#bsForget').addEventListener('click',e=>{e.preventDefault();store.set('ghtoken','');openBotSettings()})}
+  catch(e){F.innerHTML='';bsMsg(`Couldn’t load your settings (${esc(e.message)}). If the key expired or lacks permissions, <a href="#" id="bsRe">reconnect</a>.`,'dn');$('#bsRe')?.addEventListener('click',ev=>{ev.preventDefault();store.set('ghtoken','');openBotSettings()})}
+}
+async function dispatch(test){await gh('/actions/workflows/alerts.yml/dispatches',{method:'POST',body:JSON.stringify({ref:'main',inputs:{test_alert:test?'true':'false'}})})}
+$('#bsSave').addEventListener('click',async()=>{
+  if(!ghTok()){const t=$('#bsTok').value.trim();if(!t)return bsMsg('Paste your token first.','dn');store.set('ghtoken',t);bsMsg('Checking…');try{await gh('');openBotSettings()}catch(e){store.set('ghtoken','');bsMsg(`That token didn’t work (${esc(e.message)}).`,'dn')}return}
+  if(!bsCfg)return;const v=id=>$(id),c=Object.assign({},bsCfg);
+  c.leverage=+v('#bsLev').value||85;c.sizing=v('#bsSz').value;c.customRisk=+v('#bsR').value||3;c.customWeekly=+v('#bsW').value||0;
+  c.use4h=v('#bs4').checked;c.use1h=v('#bs1').checked;c.useWeekly=v('#bsWk').checked;c.alerts={entries:v('#bsAe').checked,stops:v('#bsAs').checked,exits:v('#bsAx').checked,stopMoves:v('#bsAm').checked};
+  c.stopMoveMinPct=+v('#bsMin').value||0;c.paused=v('#bsP').checked;
+  if(!c.use4h&&!c.use1h&&!c.useWeekly)return bsMsg('Keep at least one strategy part on.','dn');
+  bsMsg('Saving…');
+  try{const r=await gh('/contents/config.json',{method:'PUT',body:JSON.stringify({message:'Settings from Tidemark app',content:b64e(JSON.stringify(c,null,2)+'\n'),sha:bsSha,branch:'main'})});bsSha=r.content.sha;bsCfg=c;
+    const bal=v('#bsBal').value.trim();if(bal!==''){try{await gh('/actions/variables/BALANCE',{method:'PATCH',body:JSON.stringify({name:'BALANCE',value:String(+bal)})})}catch(e){await gh('/actions/variables',{method:'POST',body:JSON.stringify({name:'BALANCE',value:String(+bal)})})}}
+    bsMsg('Saved. The bot uses these from its next check. Tap “Check now” to apply them immediately.','up');toast('Bot settings saved')}
+  catch(e){bsMsg(`Couldn’t save (${esc(e.message)}).`,'dn')}});
+$('#bsRun').addEventListener('click',async()=>{if(!ghTok())return bsMsg('Connect first.','dn');try{await dispatch(false);bsMsg('Check started. Status updates here in about a minute.','up');setTimeout(loadBot,9e4)}catch(e){bsMsg(`Couldn’t start a check (${esc(e.message)}).`,'dn')}});
+$('#bsTest').addEventListener('click',async()=>{if(!ghTok())return bsMsg('Connect first.','dn');try{await dispatch(true);bsMsg('Test alert on its way: it should reach your phone in about a minute.','up')}catch(e){bsMsg(`Couldn’t send (${esc(e.message)}).`,'dn')}});
 /* ---------- boot ---------- */
 new ResizeObserver(draw).observe(wrap);
 new MutationObserver(()=>{draw();drawEquity()}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});

@@ -1,6 +1,18 @@
 {
   "symbol": "BTCUSDT",
+  "paused": false,
   "sizing": "Growth: 3% risk, 50% weekly",
-  "balance": 0,
-  "leverage": 85
+  "customRisk": 3,
+  "customWeekly": 50,
+  "use4h": true,
+  "use1h": true,
+  "useWeekly": true,
+  "leverage": 85,
+  "alerts": {
+    "entries": true,
+    "stops": true,
+    "exits": true,
+    "stopMoves": true
+  },
+  "stopMoveMinPct": 0.5
 }

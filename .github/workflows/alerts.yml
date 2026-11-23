@@ -33,4 +33,4 @@ jobs:
           git config user.name "tidemark-bot"
           git config user.email "tidemark-bot@users.noreply.github.com"
           git add docs/state.json docs/status.json docs/alerts.json
-          git diff --cached --quiet || git commit -m "hourly check" && git push
+          git diff --cached --quiet || (git commit -m "hourly check" && git pull --rebase -q origin main && git push)
