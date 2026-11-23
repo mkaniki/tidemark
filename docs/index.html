@@ -163,6 +163,9 @@ table.t{width:100%;border-collapse:collapse;font-size:13px}
 .form h4{grid-column:1/-1;margin:10px 0 0;font-size:13px}
 .form .pc{display:flex;gap:8px;align-items:center;justify-content:flex-end}
 .dlgf{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--line)}
+.mkpop{position:absolute;z-index:6;max-width:300px;max-height:calc(100% - 12px);overflow:auto;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.35);padding:12px 14px;font-size:13px;line-height:1.45}
+.mkpop h4{margin:0 0 6px;font-size:14px;display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.mkpop h4 button{border:0;background:none;color:inherit;font-size:18px;line-height:1;cursor:pointer;padding:0 2px}
+.mkpop .r{display:flex;justify-content:space-between;gap:12px}.mkpop .r span:first-child{opacity:.7}.mkpop p{margin:8px 0 0;opacity:.85}.mkpop .up{color:#089981}.mkpop .dn{color:#f23645}
 .toast{position:fixed;right:16px;bottom:16px;z-index:50;display:flex;flex-direction:column;gap:8px}
 .toast div{background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:8px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.3);animation:in .2s ease-out;max-width:360px}
 @keyframes in{from{transform:translateY(8px);opacity:0}}
@@ -851,7 +854,7 @@ async function load(prevSym){
     S.live=false;c=synth(sym,tf);
   }
   if(id!==loadId)return;
-  S.base=c;S.c=c;S.end=c.length+8;S.ys=1;S.bw=Math.max(4,Math.min(10,S.bw));recalc(true);buildLegend();connect();status();renderWL();renderStats();renderAlerts();draw();
+  S.base=c;S.c=c;S.end=c.length+8;S.ys=1;S.yo=0;S.bw=Math.max(4,Math.min(10,S.bw));recalc(true);buildLegend();connect();status();renderWL();renderStats();renderAlerts();draw();
 }
 let ws=null,simT=0;
 function connect(){
@@ -966,7 +969,8 @@ function drawStudy(g,C,st,R,sc,i0,i1,cw,top,h){
     else if(p.t==='area'){const z=sc.y(Math.max(sc.lo,Math.min(sc.hi,0)));g.fillStyle=alpha(col,.15);g.beginPath();let st0=null,last=null;for(let j=Math.max(0,i0-o);j<=Math.min(d.length-1,i1-o);j++){const v=d[j];if(v==null)continue;if(st0==null){st0=j;g.moveTo(X(j+o),z)}g.lineTo(X(j+o),sc.y(v));last=j}if(last!=null){g.lineTo(X(last+o),z);g.fill()}line(g,d,i0,i1,sc.y,col,p.w||1.5,o)}
   });
 }
-function render(){
+let MKH=[];
+function render(){MKH=[];
   raf=0;const W=wrap.clientWidth,H=wrap.clientHeight,dpr=devicePixelRatio||1;if(!W||!H)return;
   if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr)}
   const g=cv.getContext('2d'),C=pal();g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle=C.bg;g.fillRect(0,0,W,H);
@@ -984,8 +988,8 @@ function render(){
   let[lo,hi]=acc;if(!isFinite(lo)){lo=c[n-1].l;hi=c[n-1].h}
   const hasVol=ovSt.some(st=>st.id==='vol'&&!st.hide),volPad=hasVol?.18:0;
   let M;
-  if(S.log&&lo>0){const a=Math.log(lo),b=Math.log(hi),sp=((b-a)||.01),mid=(a+b)/2,half=(sp/2)*S.ys;M=scale(0,mainH,Math.exp(mid-half-sp*(.08+volPad)),Math.exp(mid+half+sp*.1),true)}
-  else{const span=hi-lo||hi*.01||1,mid=(lo+hi)/2,half=span/2*S.ys;M=scale(0,mainH,mid-half-span*(.08+volPad),mid+half+span*.1)}
+  if(S.log&&lo>0){const a=Math.log(lo),b=Math.log(hi),sp=((b-a)||.01),mid=(a+b)/2+(S.yo||0)*sp*S.ys,half=(sp/2)*S.ys;M=scale(0,mainH,Math.exp(mid-half-sp*(.08+volPad)),Math.exp(mid+half+sp*.1),true)}
+  else{const span=hi-lo||hi*.01||1,mid=(lo+hi)/2+(S.yo||0)*span*S.ys,half=span/2*S.ys;M=scale(0,mainH,mid-half-span*(.08+volPad),mid+half+span*.1)}
   L.M=M;L.panes.push({top:0,h:mainH,sc:M,main:true});
 
   const step=nice((M.hi-M.lo)/Math.max(2,mainH/56)),pd=Math.max(0,-Math.floor(Math.log10(step))),ticks=[];
@@ -1075,10 +1079,11 @@ function render(){
 function drawShapes(g,sh,i0,i1){for(let i=i0;i<=i1;i++){if(!sh.d[i])continue;const b=S.c[i],x=X(i),above=sh.loc==='abovebar',y=above?L.M.y(b.h)-8:L.M.y(b.l)+8,s=Math.max(4,Math.min(7,S.bw*.45));g.fillStyle=sh.c;g.beginPath();
   if(sh.shape==='circle'){g.arc(x,y+(above?-s/2:s/2),s*.6,0,7)}else if(sh.shape==='triangleup'||sh.shape==='arrowup'){const yy=above?y-s:y;g.moveTo(x,yy);g.lineTo(x-s,yy+s*1.3);g.lineTo(x+s,yy+s*1.3)}else{const yy=above?y-s*1.3:y;g.moveTo(x-s,yy);g.lineTo(x+s,yy);g.lineTo(x,yy+s*1.3)}g.fill();
   if(sh.text){g.font='11px Inter,system-ui';g.textAlign='center';g.fillText(sh.text,x,above?y-s*1.6-4:y+s*1.6+12)}}}
-function drawMarkers(g,C,bt,i0,i1){g.font='600 11px Inter,system-ui';g.textAlign='center';
+function drawMarkers(g,C,bt,i0,i1){g.font='600 11px Inter,system-ui';g.textAlign='center';const placed=[];
+  const lab=(t,x,y,dn)=>{const w=g.measureText(t).width+6;let yy=y;for(let k=0;k<6;k++){if(!placed.some(r=>Math.abs(r.x-x)<(r.w+w)/2&&Math.abs(r.y-yy)<13))break;yy+=dn?13:-13}placed.push({x,y:yy,w});g.fillText(t,x,yy);return{yy,w}};
   for(const mk of bt.markers){if(mk.i<i0||mk.i>i1)continue;const b=S.c[mk.i],x=X(mk.i),buy=mk.dir>0,col=buy?'#2962ff':'#e91e63',y=buy?L.M.y(b.l)+6:L.M.y(b.h)-6;
     g.fillStyle=col;g.beginPath();if(buy){g.moveTo(x,y);g.lineTo(x-5,y+7);g.lineTo(x+5,y+7)}else{g.moveTo(x,y);g.lineTo(x-5,y-7);g.lineTo(x+5,y-7)}g.fill();
-    if(S.bw>=4&&mk.id!=='Reverse')g.fillText(mk.id,x,buy?y+20:y-12)}}
+    const hl=S.bw>=4&&mk.id!=='Reverse'?lab(mk.id,x,buy?y+20:y-12,buy):null;MKH.push({x,y:buy?y+4:y-4,ly:hl&&hl.yy-4,lw:hl&&hl.w,mk,bt})}}
 function hover(){const n=S.c.length;if(!L||!S.mouse||S.mouse.x>=L.pw)return n-1;return Math.max(0,Math.min(n-1,Math.round(L.start+S.mouse.x/S.bw-.5)))}
 
 /* ---------- legend ---------- */
@@ -1182,7 +1187,7 @@ $('#rail').addEventListener('click',e=>{const k=e.target.closest('button')?.data
   if(k==='magnet'){S.magnet=!S.magnet;store.set('magnet',S.magnet)}
   else if(k==='undo')undo();
   else if(k==='clear'){if((S.draw[S.sym]||[]).length){pushHist();S.draw[S.sym]=[];S.sel=null;saveDraw();toast('Drawings cleared. Ctrl+Z to undo.')}}
-  else if(k==='fit'){S.end=S.c.length+8;S.bw=8;S.ys=1}
+  else if(k==='fit'){S.end=S.c.length+8;S.bw=8;S.ys=1;S.yo=0}
   else{S.tool=k;S.pending=null}
   renderRail();draw()});
 
@@ -1192,7 +1197,8 @@ cv.addEventListener('pointerdown',e=>{
   if(m.x>=L.pw){S.drag={axis:true,y:m.y,ys:S.ys};return}
   if(m.y>=L.H-TAX){S.drag={taxis:true,x:m.x,bw:S.bw,end:S.end};return}
   if(S.rp.pick){const i=Math.round(L.start+m.x/S.bw-.5);startReplay(Math.max(20,Math.min(S.base.length-2,i)));return}
-  const inMain=m.y<L.mainH;
+  const inMain=m.y<L.mainH;closePop();
+  if(S.tool==='cursor'&&inMain){const hm=markerAt(m.x,m.y);if(hm){showPop(hm,m);return}}
   if(S.tool!=='cursor'&&inMain){const pt=ptAt(m.x,m.y),T=S.tool;
     if(T==='hline'||T==='vline')return commit({type:T,a:pt});
     if(T==='text'){textNote(pt,m);return}
@@ -1203,18 +1209,18 @@ cv.addEventListener('pointerdown',e=>{
     draw();return}
   const h=inMain&&hit(m.x,m.y);
   if(h){S.sel=h.d;pushHist();const d=h.d;S.drag={shape:d,h:h.h,start:ptAt(m.x,m.y),a:{...d.a},b:d.b&&{...d.b},c:d.c&&{...d.c}};draw();return}
-  S.sel=null;S.drag={pan:true,x:m.x,end:S.end};draw();
+  S.sel=null;S.drag={pan:true,x:m.x,y:m.y,end:S.end,yo:S.yo||0,v:inMain};draw();
 });
 cv.addEventListener('pointermove',e=>{
   const m=pos(e);S.mouse=m;const D=S.drag;
-  if(D?.pan)S.end=D.end-(m.x-D.x)/S.bw;
+  if(D?.pan){S.end=D.end-(m.x-D.x)/S.bw;if(D.v)S.yo=D.yo+(m.y-D.y)/L.mainH*1.18}
   else if(D?.axis)S.ys=Math.max(.05,Math.min(20,D.ys*Math.exp((m.y-D.y)/150)));
   else if(D?.taxis){const nb=Math.max(1.5,Math.min(80,D.bw*Math.exp((m.x-D.x)/200)));S.bw=nb;S.end=D.end}
   else if(D?.shape){const p=ptAt(m.x,m.y),s=D.shape;
     if(D.h==='a')s.a=p;else if(D.h==='b'){s.b=p;if(s.c&&(s.type==='long'||s.type==='short'))s.c.t=p.t}else if(D.h==='c'){s.c=(s.type==='long'||s.type==='short')?{t:s.b.t,p:p.p}:p}
     else{const dt=p.t-D.start.t,dp=p.p-D.start.p;for(const k of['a','b','c'])if(D[k])s[k]={t:D[k].t+dt,p:D[k].p+dp}}}
   else if(S.pending){const p=ptAt(m.x,m.y);if(S.pending.stage===2)S.pending.c=p;else{S.pending.b=p;if(S.pending.type==='channel')S.pending.c=p}}
-  if(!D&&L)cv.style.cursor=m.x>=L.pw?'ns-resize':m.y>=L.H-TAX?'ew-resize':S.tool!=='cursor'||S.rp.pick?'crosshair':(m.y<L.mainH&&hit(m.x,m.y))?'move':'crosshair';
+  if(!D&&L)cv.style.cursor=m.x>=L.pw?'ns-resize':m.y>=L.H-TAX?'ew-resize':S.tool!=='cursor'||S.rp.pick?'crosshair':(m.y<L.mainH&&hit(m.x,m.y))?'move':(m.y<L.mainH&&markerAt(m.x,m.y))?'pointer':'crosshair';
   draw();
 });
 const up=()=>{const D=S.drag;S.drag=null;
@@ -1223,10 +1229,35 @@ const up=()=>{const D=S.drag;S.drag=null;
   draw()};
 cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
 cv.addEventListener('pointerleave',()=>{if(!S.drag){S.mouse=null;draw()}});
-cv.addEventListener('wheel',e=>{e.preventDefault();if(!L)return;const m=pos(e);
+cv.addEventListener('wheel',e=>{e.preventDefault();closePop();if(!L)return;const m=pos(e);
   if(e.shiftKey||Math.abs(e.deltaX)>Math.abs(e.deltaY)){S.end+=(e.deltaX||e.deltaY)/S.bw;return draw()}
   const anchor=L.start+m.x/S.bw,nb=Math.max(1.5,Math.min(80,S.bw*Math.exp(-e.deltaY*.0015)));S.bw=nb;S.end=anchor-m.x/nb+L.pw/nb;draw()},{passive:false});
-cv.addEventListener('dblclick',e=>{const m=pos(e);if(!L)return;if(m.x>=L.pw){S.ys=1;return draw()}if(m.y<L.mainH){const h=hit(m.x,m.y);if(h){if(h.d.type==='text'){}return}}S.end=S.c.length+8;S.bw=8;S.ys=1;draw()});
+cv.addEventListener('dblclick',e=>{const m=pos(e);if(!L)return;if(m.x>=L.pw){S.ys=1;S.yo=0;return draw()}if(m.y<L.mainH){const h=hit(m.x,m.y);if(h){if(h.d.type==='text'){}return}}S.end=S.c.length+8;S.bw=8;S.ys=1;S.yo=0;draw()});
+function markerAt(x,y){const out=[];for(const h of MKH){const onLab=h.ly!=null&&Math.abs(h.x-x)<h.lw/2+4&&Math.abs(h.ly-y)<10,d=Math.hypot(h.x-x,h.y-y);if(onLab||d<16)out.push({h,s:onLab?0:d})}
+  out.sort((a,b)=>a.s-b.s);const seen=new Set(),r=[];for(const o of out){const k=o.h.mk.i+'|'+o.h.mk.k+'|'+o.h.mk.id+'|'+o.h.mk.dir;if(!seen.has(k)){seen.add(k);r.push(o.h)}}return r.length?r.slice(0,4):null}
+function closePop(){document.querySelectorAll('.mkpop').forEach(e=>e.remove())}
+const WHY={'Stop':'The stop-loss was hit.','Trail':'The trailing stop was hit, locking in what the trade had made.','Channel exit':'Price closed back through the 20-bar 4H channel, so the 4H trend is treated as over.',
+  '4H trade ended':'The 4H trade this 1H trade was following closed, so this one closed with it.','Time':'This 1H trade reached its 72-hour time limit.','TP':'Take-profit hit.',
+  'Weekly close below average':'The week closed below the 50-week average, so the long ended.','Weekly close above average':'The week closed above the 50-week average, so the short ended.',
+  'Weekly close above 20-week EMA':'The week closed back above the 20-week EMA, so the short was covered early.','Monthly close below average':'The month closed below the 10-month average.','Monthly close above average':'The month closed above the 10-month average.','End':'Closed at the end of the backtest window.'};
+const PART={'4H':'4H algo: breakout of the 20-day high/low, in the 4H trend direction','1H':'1H legs: extra trade in the direction of the open 4H trade','W':'Weekly: long above the 50-week average, short below','M':'Monthly part','LT':'Long-term part'};
+function popHtml(h){const {mk,bt}=h,tf=t=>new Date(t).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  const tr=(bt.trades||[]),side=d=>d>0?'LONG':'SHORT';let html='';
+  const parts=String(mk.id).split(' '),short=PART[parts[0]]?parts[0]:null,rest=short?parts.slice(1).join(' '):String(mk.id);
+  const row=(a,b)=>`<div class="r"><span>${a}</span><span>${b}</span></div>`;
+  if(mk.k==='in'){const d=mk.dir,t=tr.find(t=>t.ei===mk.i&&t.dir===d)||(bt.opens||[]).concat(bt.open?[bt.open]:[]).find(o=>o.ei===mk.i&&o.dir===d);
+    html=`<h4><span>${short?short+' ':''}${side(d)} entry</span><button aria-label="Close">×</button></h4>${short?`<div style="opacity:.75;margin-bottom:6px">${esc(PART[short])}</div>`:''}`+row('Time',tf(S.c[mk.i].t))+row('Entry price',fp(mk.price));
+    if(t&&t.xi!=null){const r=t.dir*(t.xp/t.ep-1)*100;html+=row('Closed',tf(t.xt)+' at '+fp(t.xp))+row('Result',`<b class="${r>=0?'up':'dn'}">${r>=0?'+':''}${r.toFixed(2)}% price move</b>`)+(t.why?`<p>${esc(WHY[t.why]||t.why)}</p>`:'')}
+    else if(t)html+=`<p>Still open.${t.stop!=null?' Stop now at '+fp(t.stop)+'.':''}</p>`}
+  else{const d=-mk.dir,t=tr.find(t=>t.xi===mk.i&&t.dir===d&&(!short||(t.sleeve||t.id||'').startsWith(short==='W'?'Weekly':short==='M'?'Monthly':short)))||tr.find(t=>t.xi===mk.i&&t.dir===d);
+    const r=t?t.dir*(t.xp/t.ep-1)*100:null;
+    html=`<h4><span>${short?short+' ':''}${side(d)} closed</span><button aria-label="Close">×</button></h4>`+row('Reason',esc(rest))+`<p style="margin:2px 0 8px">${esc(WHY[rest]||'')}</p>`+row('Time',tf(S.c[mk.i].t))+row('Exit price',fp(mk.price))+
+      (t?row('Entered',tf(t.et)+' at '+fp(t.ep))+row('Result',`<b class="${r>=0?'up':'dn'}">${r>=0?'+':''}${r.toFixed(2)}% price move${t.partial?' (part)':''}</b>`):'')}
+  return html}
+function showPop(list,m){const el=document.createElement('div');el.className='mkpop';
+  el.innerHTML=list.map((h,j)=>popHtml(h).replace('<button aria-label="Close">×</button>',j?'':'<button aria-label="Close">×</button>')).join('<hr style="border:0;border-top:1px solid var(--line);margin:10px 0">');wrap.append(el);
+  const W=wrap.clientWidth,H=wrap.clientHeight,ew=el.offsetWidth,eh=el.offsetHeight;el.style.left=Math.max(6,Math.min(W-ew-6,m.x+12))+'px';el.style.top=Math.max(6,Math.min(H-eh-6,m.y-eh-12<6?m.y+16:m.y-eh-12))+'px';
+  el.querySelector('button').onclick=closePop;el.addEventListener('pointerdown',e=>e.stopPropagation())}
 function textNote(pt,m){
   const inp=document.createElement('input');inp.placeholder='Type a note, Enter to place';Object.assign(inp.style,{position:'absolute',left:m.x+'px',top:(m.y-18)+'px',zIndex:5,height:'32px',padding:'0 8px',border:'1px solid var(--acc)',borderRadius:'6px',background:'var(--bg)',fontSize:'16px',width:'220px'});
   wrap.append(inp);inp.focus();let done=false;
@@ -1236,7 +1267,7 @@ function textNote(pt,m){
 document.addEventListener('keydown',e=>{
   if(e.target.matches('input,textarea,select'))return;
   const k=e.key.toLowerCase();
-  if(e.key==='Escape'){S.pending=null;S.tool='cursor';S.sel=null;S.rp.pick=false;renderRail();$$('.modal').forEach(m=>m.classList.remove('open'))}
+  if(e.key==='Escape'){closePop();S.pending=null;S.tool='cursor';S.sel=null;S.rp.pick=false;renderRail();$$('.modal').forEach(m=>m.classList.remove('open'))}
   else if((e.key==='Delete'||e.key==='Backspace')&&S.sel){pushHist();S.draw[S.sym]=(S.draw[S.sym]||[]).filter(d=>d!==S.sel);S.sel=null;saveDraw()}
   else if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();undo()}
   else if(e.altKey&&k==='t'){S.tool='trend';renderRail()}else if(e.altKey&&k==='h'){S.tool='hline';renderRail()}else if(e.altKey&&k==='v'){S.tool='vline';renderRail()}else if(e.altKey&&k==='f'){S.tool='fib';renderRail()}
