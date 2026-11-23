@@ -1,0 +1,36 @@
+name: Tidemark hourly check
+on:
+  schedule:
+    - cron: '2 * * * *'        # 2 minutes past every hour (UTC), right after each 1H candle closes
+  workflow_dispatch:           # "Run workflow" button: run now / send a test alert
+    inputs:
+      test_alert:
+        description: 'Send a test alert to my phone'
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency: tidemark
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run strategy and send alerts
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BALANCE: ${{ vars.BALANCE }}
+          TEST_ALERT: ${{ github.event.inputs.test_alert == 'true' && '1' || '0' }}
+        run: node bot/run.mjs
+      - name: Save state for the app
+        run: |
+          git config user.name "tidemark-bot"
+          git config user.email "tidemark-bot@users.noreply.github.com"
+          git add docs/state.json docs/status.json docs/alerts.json
+          git diff --cached --quiet || git commit -m "hourly check" && git push
