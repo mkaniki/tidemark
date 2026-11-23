@@ -900,14 +900,50 @@ function recalc(scripts){
   if(scripts){S.lastScriptRun=Date.now();for(const st of S.studies)if(st.id==='script')runScript(st)}
 }
 let wURL=null;
+/* Strategies built on 1H candles (e.g. All-in-one) run on 1H data behind the scenes on any other chart,
+   then their trades, stops and lines are drawn on the chart you're viewing. */
+const needs1h=sc=>/@timeframe\s+1h|Open a 1H chart/i.test(sc.code);
+const SIDE={};
+async function side1h(){
+  const sym=S.sym,c=S.c,key=sym+'|'+S.depth,now=Date.now();let E=SIDE[key];
+  const since=Math.max(FIRST,Math.min(sinceOf()||Infinity,c.length?c[0].t-400*864e5:now,SINCE));
+  if(!E){if(!S.live)throw new Error('offline');E=SIDE[key]={bars:null,since,at:0,p:null}}
+  if(!E.bars){E.p=E.p||(async()=>{let out=[],end=null;
+      for(let k=0;k<120;k++){const j=await getJSON(`/klines?symbol=${sym}&interval=1h&limit=1000${end?`&endTime=${end}`:''}`);if(!j.length)break;
+        out=j.filter(r=>r[0]>=since).map(r=>({t:r[0],o:+r[1],h:+r[2],l:+r[3],c:+r[4],v:+r[5]})).concat(out);
+        $('#stat').textContent=`Loading 1H data for the strategy… ${out.length.toLocaleString()} bars`;if(j.length<1000||j[0][0]<=since||out.length>=MAXB)break;end=j[0][0]-1}
+      E.bars=out;E.at=Date.now();status()})();await E.p;E.p=null}
+  else if(now-E.at>60000){E.at=now;try{const j=await getJSON(`/klines?symbol=${sym}&interval=1h&limit=5`),b=E.bars;
+      for(const r of j){const x={t:r[0],o:+r[1],h:+r[2],l:+r[3],c:+r[4],v:+r[5]},last=b[b.length-1];if(x.t===last.t)b[b.length-1]=x;else if(x.t>last.t)b.push(x)}}catch(e){}}
+  return E.bars}
+function remapRes(o,T1,ms){        // move a result computed on 1H bars onto the chart's bars
+  const c=S.c,nc=c.length,n1=T1.length,CT=c.map(b=>b.t);
+  const cidx=t=>{let lo=0,hi=nc-1,r=-1;while(lo<=hi){const m=(lo+hi)>>1;if(CT[m]<=t){r=m;lo=m+1}else hi=m-1}return r};
+  const k1=new Int32Array(n1);for(let j=0;j<n1;j++)k1[j]=cidx(T1[j]);
+  const last=new Int32Array(nc).fill(-1);{let j=0;for(let k=0;k<nc;k++){const end=CT[k]+ms;while(j<n1&&T1[j]<end)j++;last[k]=T1[0]<end?j-1:-1}}
+  const val=a=>{const r=new Array(nc);for(let k=0;k<nc;k++){const j=last[k];r[k]=j>=0?a[j]:null}return r};
+  const any=a=>{const r=new Array(nc).fill(false);for(let j=0;j<n1;j++)if(a[j]&&k1[j]>=0)r[k1[j]]=true;return r};
+  const I=i=>i==null?i:Math.max(0,k1[Math.min(n1-1,i)]);
+  for(const p of o.plots||[])p.d=val(p.d);for(const x of o.bgs||[])x.d=val(x.d);for(const x of o.shapes||[])x.d=any(x.d);for(const x of o.alerts||[])x.d=any(x.d);
+  const bt=o.bt;if(bt){o._ev1=(bt.events||[]).map(e=>({...e}));o._n1=n1;
+    const walk=(x,d)=>{if(!x||typeof x!=='object'||d>2)return;for(const k of Object.keys(x)){const v=x[k];if(Array.isArray(v)&&v.length===n1&&v.every(e=>e==null||typeof e==='number'))x[k]=val(v);else if(v&&typeof v==='object'&&!Array.isArray(v))walk(v,d+1)}};
+    walk(bt,0);for(const sl of bt.sleeves||[])walk(sl,1);
+    for(const m of bt.markers||[])m.i=I(m.i);for(const t of bt.trades||[]){t.ei=I(t.ei);t.xi=I(t.xi)}
+    for(const t of bt.opens||[])t.ei=I(t.ei);if(bt.open)bt.open.ei=I(bt.open.ei);for(const e of bt.events||[])e.i=I(e.i)}
+  o.title=(o.title||'')+' (1H)';return o}
 function runScript(st){
   const sc=S.scripts.find(s=>s.id===st.sid);if(!sc){S.R[st.uid]={ov:true,plots:[],err:'Script was deleted'};return}
+  if(S.tf!=='1h'&&needs1h(sc)){const job=st.job=(st.job||0)+1,tf=S.tf,sym=S.sym;
+    side1h().then(b=>{if(job!==st.job||tf!==S.tf||sym!==S.sym)return;
+      const bars={o:b.map(x=>x.o),h:b.map(x=>x.h),l:b.map(x=>x.l),c:b.map(x=>x.c),v:b.map(x=>x.v),t:b.map(x=>x.t)};execScript(st,sc,bars,o=>o.error?o:remapRes(o,bars.t,TF[S.tf]))})
+    .catch(()=>{if(job===st.job)setRes(st,{error:'This strategy runs on 1H candles. Couldn’t load them, so open a 1H chart to see it.'})});return}
+  const D=S.D;execScript(st,sc,{o:D.open,h:D.high,l:D.low,c:D.close,v:D.volume,t:D.time})}
+function execScript(st,sc,bars,post){
   if(!wURL)wURL=URL.createObjectURL(new Blob([`${TAF}\n${BT}\n${STATS}\n${BTP}\n${MBTP}\n${RUN}\nconst ta=TAF();onmessage=RUN;`],{type:'text/javascript'}));
-  const D=S.D,bars={o:D.open,h:D.high,l:D.low,c:D.close,v:D.volume,t:D.time};
   let w;try{w=new Worker(wURL)}catch(e){setRes(st,{error:'This browser blocked the script sandbox. Open the downloaded file to run scripts.'});return}
-  const job=st.job=(st.job||0)+1,t0=performance.now();
+  const job=post?st.job:(st.job=(st.job||0)+1),t0=performance.now();
   const to=setTimeout(()=>{w.terminate();if(job===st.job)setRes(st,{error:'Script ran longer than 6 seconds and was stopped. Check for an endless loop.'})},6000);
-  w.onmessage=e=>{clearTimeout(to);w.terminate();if(job===st.job){e.data.ms=performance.now()-t0;setRes(st,e.data)}};
+  w.onmessage=e=>{clearTimeout(to);w.terminate();if(job===st.job){let o=e.data;o.ms=performance.now()-t0;if(post)o=post(o);setRes(st,o)}};
   w.onerror=e=>{e.preventDefault();clearTimeout(to);w.terminate();if(job===st.job)setRes(st,{error:e.message||'Script error'})};
   w.postMessage({code:sc.code,bars,inputs:st.p||{}});
 }
@@ -1486,12 +1522,12 @@ function fmtEvent(o,e){
 }
 const EVF={signal:'evEntry',tp:'evTp',sl:'evSl',exit:'evExit',stop_move:'evMove'};
 function processEvents(st,o){
-  const n=S.c.length;
-  for(const e of o.bt.events){
+  const n=o._n1||S.c.length,tfk=o._n1?'1h':S.tf;
+  for(const e of (o._ev1||o.bt.events)){
     if(!EVF[e.type]||e.i<n-2)continue;
     if((e.type==='signal'||(e.type==='stop_move'&&e.why!=='Stop moved to breakeven'))&&e.i!==n-2)continue; // only on a closed bar
     if(e.type==='exit'&&e.i!==n-2)continue;
-    const key=[st.uid,S.sym,S.tf,e.type,e.t,e.why||'',e.dir,e.sleeve||''].join('|');if(S.seen.has(key))continue;S.seen.add(key);
+    const key=[st.uid,S.sym,tfk,e.type,e.t,e.why||'',e.dir,e.sleeve||''].join('|');if(S.seen.has(key))continue;S.seen.add(key);
     if(!st.armed||S.rp.on||!S.dl[EVF[e.type]])continue;
     const m=fmtEvent(o,e);if(m)deliver(m[0],m[1]);
   }
