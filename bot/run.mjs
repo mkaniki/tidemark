@@ -50,7 +50,7 @@ function words(res, e) {
 async function send(title, body) {
   console.log(`\n>>> ${title}\n${body}`); if (DRY) return
   const jobs = []
-  if (env.NTFY_TOPIC) jobs.push(fetch('https://ntfy.sh/' + encodeURIComponent(env.NTFY_TOPIC.trim()), { method: 'POST', headers: { Title: title, Priority: 'high', Tags: 'chart_with_upwards_trend' }, body }))
+  if (env.NTFY_TOPIC) jobs.push(fetch('https://ntfy.sh/' + encodeURIComponent(env.NTFY_TOPIC.trim()), { method: 'POST', headers: { Title: title.replace(/·/g, '-').replace(/[^\x20-\x7E]/g, ''), Priority: 'high', Tags: 'chart_with_upwards_trend' }, body }))
   if (env.TELEGRAM_TOKEN && env.TELEGRAM_CHAT_ID) jobs.push(fetch(`https://api.telegram.org/bot${env.TELEGRAM_TOKEN.trim()}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID.trim(), text: `${title}\n${body}` }) }))
   if (!jobs.length) console.log('(no NTFY_TOPIC or TELEGRAM secrets set: alert only printed)')
   for (const r of await Promise.allSettled(jobs)) if (r.status === 'rejected' || (r.value && !r.value.ok)) console.log('delivery problem:', r.reason || r.value.status)
