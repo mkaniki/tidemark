@@ -828,15 +828,36 @@ async function getJSON(path){
 const SINCE=Date.UTC(2020,0,1),MAXB=90000;
 const FIRST=Date.UTC(2017,7,1),sinceOf=()=>S.depth==='2020'?SINCE:S.depth==='all'?FIRST:0;
 const want=tf=>sinceOf()?Math.min(MAXB,Math.ceil((Date.now()-sinceOf())/TF[tf])+1):+S.depth;
+/* Candle cache on this device (IndexedDB) + parallel downloads: only new candles are fetched after the first load */
+const IDB=(()=>{let dbp=null;const db=()=>dbp=dbp||new Promise((res,rej)=>{try{const r=indexedDB.open('tidemark',1);r.onupgradeneeded=()=>r.result.createObjectStore('bars');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}});
+  const tx=(mode,fn)=>db().then(d=>new Promise((res,rej)=>{const t=d.transaction('bars',mode),q=fn(t.objectStore('bars'));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error)}));
+  return{get:k=>tx('readonly',o=>o.get(k)).catch(()=>null),put:(k,v)=>tx('readwrite',o=>o.put(v,k)).catch(()=>null)}})();
+const toRec=b=>{const n=b.length,F=()=>new Float64Array(n),r={t:F(),o:F(),h:F(),l:F(),c:F(),v:F()};b.forEach((x,i)=>{r.t[i]=x.t;r.o[i]=x.o;r.h[i]=x.h;r.l[i]=x.l;r.c[i]=x.c;r.v[i]=x.v});return r};
+const fromRec=r=>{const out=new Array(r.t.length);for(let i=0;i<out.length;i++)out[i]={t:r.t[i],o:r.o[i],h:r.h[i],l:r.l[i],c:r.c[i],v:r.v[i]};return out};
+async function rangeFetch(sym,tf,from,to,isCur,label){            // [from,to) in parallel windows of 1000 candles
+  const ms=TF[tf],starts=[];for(let s=from;s<to;s+=1000*ms)starts.push(s);
+  const res=new Array(starts.length);let next=0,done=0;
+  const worker=async()=>{while(next<starts.length){const k=next++;let j=null;
+      for(let a=0;a<3&&!j;a++){try{j=await getJSON(`/klines?symbol=${sym}&interval=${tf}&startTime=${starts[k]}&limit=1000`)}catch(e){if(e.message==='nosym'||a===2)throw e;await new Promise(r=>setTimeout(r,400))}}
+      if(!isCur())return;res[k]=j.filter(r=>r[0]<to).map(r=>({t:r[0],o:+r[1],h:+r[2],l:+r[3],c:+r[4],v:+r[5]}));done++;
+      if(starts.length>2)$('#stat').textContent=`${label} ${Math.round(done/starts.length*100)}%`}};
+  await Promise.all(Array.from({length:Math.min(8,starts.length)},worker));
+  return isCur()?res.flat():null}
+async function getCandles(sym,tf,since,isCur,label){
+  const ms=TF[tf],now=Date.now(),key=sym+'|'+tf;
+  let rec=await IDB.get(key),bars=rec&&rec.t&&rec.t.length?fromRec(rec):[],from=rec&&rec.from!=null?rec.from:Infinity;
+  if(!isCur())return null;
+  let head=[];if(since<from||!bars.length){head=await rangeFetch(sym,tf,since,bars.length?bars[0].t:now+ms,isCur,label);if(!head)return null;from=Math.min(since,from)}
+  const tailFrom=bars.length?bars[bars.length-1].t:null;                 // refetch the last cached candle (it may have been unfinished)
+  let tail=[];if(tailFrom!=null){tail=await rangeFetch(sym,tf,tailFrom,now+ms,isCur,label);if(!tail)return null}
+  const m=new Map();for(const x of head)m.set(x.t,x);for(const x of bars)m.set(x.t,x);for(const x of tail)m.set(x.t,x);
+  const all=[...m.values()].sort((a,b)=>a.t-b.t);
+  IDB.put(key,Object.assign(toRec(all),{from}));
+  let i0=0;while(i0<all.length&&all[i0].t<since)i0++;return all.slice(i0)}
 async function fetchBars(sym,tf,id){
-  const W=want(tf),since=sinceOf();let out=[],end=null;
-  while(out.length<W){const lim=Math.min(1000,W-out.length);
-    const j=await getJSON(`/klines?symbol=${sym}&interval=${tf}&limit=${lim}${end?`&endTime=${end}`:''}`);if(id!==loadId)return null;if(!j.length)break;
-    out=j.filter(k=>k[0]>=since).map(k=>({t:k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5]})).concat(out);
-    if(out.length>1000)$('#stat').textContent=`Loading history… ${out.length.toLocaleString()} bars`;
-    if(j.length<lim||(since&&j[0][0]<=since))break;end=j[0][0]-1}
-  return out;
-}
+  const since=sinceOf()||Math.max(FIRST,Date.now()-(+S.depth+2)*TF[tf]),W=want(tf);
+  const out=await getCandles(sym,tf,since,()=>id===loadId,`Loading ${sym} ${TFL[tf]}…`);
+  return out&&out.slice(-W)}
 function synth(sym,tf){
   const ms=TF[tf],n=Math.min(want(tf),MAXB),r=rng(hash(sym+tf)),now=Math.floor(Date.now()/ms)*ms,vol=Math.min(.05,.0028*Math.sqrt(ms/36e5));
   let p=100,drift=0;const out=[];
@@ -908,11 +929,7 @@ async function side1h(){
   const sym=S.sym,c=S.c,key=sym+'|'+S.depth,now=Date.now();let E=SIDE[key];
   const since=Math.max(FIRST,Math.min(sinceOf()||Infinity,c.length?c[0].t-400*864e5:now,SINCE));
   if(!E){if(!S.live)throw new Error('offline');E=SIDE[key]={bars:null,since,at:0,p:null}}
-  if(!E.bars){E.p=E.p||(async()=>{let out=[],end=null;
-      for(let k=0;k<120;k++){const j=await getJSON(`/klines?symbol=${sym}&interval=1h&limit=1000${end?`&endTime=${end}`:''}`);if(!j.length)break;
-        out=j.filter(r=>r[0]>=since).map(r=>({t:r[0],o:+r[1],h:+r[2],l:+r[3],c:+r[4],v:+r[5]})).concat(out);
-        $('#stat').textContent=`Loading 1H data for the strategy… ${out.length.toLocaleString()} bars`;if(j.length<1000||j[0][0]<=since||out.length>=MAXB)break;end=j[0][0]-1}
-      E.bars=out;E.at=Date.now();status()})();await E.p;E.p=null}
+  if(!E.bars){E.p=E.p||(async()=>{const out=await getCandles(sym,'1h',since,()=>true,'Loading 1H data for the strategy…');E.bars=out.slice(-MAXB);E.at=Date.now();status()})();await E.p;E.p=null}
   else if(now-E.at>60000){E.at=now;try{const j=await getJSON(`/klines?symbol=${sym}&interval=1h&limit=5`),b=E.bars;
       for(const r of j){const x={t:r[0],o:+r[1],h:+r[2],l:+r[3],c:+r[4],v:+r[5]},last=b[b.length-1];if(x.t===last.t)b[b.length-1]=x;else if(x.t>last.t)b.push(x)}}catch(e){}}
   return E.bars}
