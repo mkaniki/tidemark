@@ -1,7 +1,10 @@
 name: Tidemark hourly check
 on:
   schedule:
-    - cron: '2 * * * *'        # 2 minutes past every hour (UTC), right after each 1H candle closes
+    # GitHub delays or skips runs at busy times (especially near :00), so check twice an hour.
+    # Alerts are never sent twice: the bot remembers the last candle it alerted on.
+    - cron: '7 * * * *'
+    - cron: '37 * * * *'
   workflow_dispatch:           # "Run workflow" button: run now / send a test alert
     inputs:
       test_alert:
