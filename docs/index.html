@@ -87,6 +87,8 @@ select.tb{border:0;background:transparent;appearance:none}
 .al .a{display:flex;justify-content:space-between;align-items:center;padding:6px 14px;font-size:13px}
 .al .a button{color:var(--mute);width:24px;height:24px}
 .empty{color:var(--mute);font-size:13px;padding:4px 14px 10px}
+.my{padding:2px 14px 12px;font-size:13px;border-bottom:1px solid var(--line)}.my .pp{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0}.my .pp .h{display:flex;justify-content:space-between;gap:8px;font-weight:600}.my .pp .r{display:flex;justify-content:space-between;gap:8px;color:var(--mute)}.my .pp .r b{color:var(--ink);font-weight:500}.my .ck{margin:4px 0 0;padding-left:16px;color:var(--ink)}.my .ck li{margin:2px 0}.my .act{display:flex;gap:6px;margin-top:6px}.my .act button,.my .tools button{font-size:12px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:none;color:inherit;cursor:pointer}.my .tools{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 6px}.my .net{font-weight:600;margin:6px 0 2px}.up{color:#089981}.dn{color:#f23645}
+.mytab{width:100%;border-collapse:collapse;font-size:13px}.mytab td,.mytab th{padding:3px 4px;text-align:left}.mytab input,.mytab select{width:100%;box-sizing:border-box;padding:4px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--ink)}
 .bot{padding:2px 14px 12px;font-size:13px;border-bottom:1px solid var(--line)}.bot .st{color:var(--mute);margin-bottom:6px}.bot .st b{color:var(--ink)}.bot .warn{color:var(--dn);font-weight:600}.bot .pos{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:6px 0;border-top:1px solid var(--line)}.bot .pos span{color:var(--mute)}
 #botChip.ok{color:var(--up)}#botChip.bad{color:var(--dn)}
 .deliv{display:flex;flex-direction:column;gap:8px;padding:4px 14px 12px;font-size:13px;color:var(--mute)}
@@ -206,7 +208,7 @@ table.t{width:100%;border-collapse:collapse;font-size:13px}
     <button id="scrBtn" class="tb"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 5L2 9l4 4M12 5l4 4-4 4"/></svg>Scripts</button>
     <button id="rpBtn" class="tb"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4v10M7 4l8 5-8 5z"/></svg>Replay</button>
     <button id="logBtn" class="tb" title="Logarithmic price scale">Log</button>
-    <button id="botChip" class="tb" hidden title="Cloud bot status"></button>
+    <button id="botChip" class="tb" hidden title="Cloud bot status"></button><button id="myChip" class="tb" title="My Bitunix positions">My trades</button>
     <button id="wlBtn" class="tb">Watchlist</button>
     <div class="status"><span id="dot" class="dot"></span><span id="stat">Connecting…</span></div>
   </header>
@@ -226,6 +228,7 @@ table.t{width:100%;border-collapse:collapse;font-size:13px}
     </main>
     <aside class="side" id="side">
       <div id="botBox" hidden><h2>Cloud bot</h2><div class="bot" id="bot"></div></div>
+      <div id="myBox"><h2>My positions</h2><div class="my" id="my"></div></div>
       <h2>Watchlist</h2>
       <form class="add" id="addF"><input id="addI" placeholder="Add symbol, e.g. ARBUSDT" aria-label="Add symbol" spellcheck="false"><button class="btn">Add</button></form>
       <div class="wl" id="wl"></div>
@@ -294,6 +297,19 @@ table.t{width:100%;border-collapse:collapse;font-size:13px}
   <div class="form" id="bsF" style="grid-template-columns:1fr 150px"></div>
   <div class="dlgf" style="flex-wrap:wrap"><button class="btn ghost" id="bsTest">Send test alert</button><button class="btn ghost" id="bsRun">Check now</button><span style="flex:1"></span><button class="btn ghost" data-close>Cancel</button><button class="btn" id="bsSave">Save</button></div>
   <div class="empty" id="bsMsg" style="padding:0 16px 12px"></div>
+</div></div>
+<div class="modal" id="myM"><div class="dlg" role="dialog" aria-label="Add my positions" style="max-width:640px">
+  <div class="dlgh"><h3>My positions</h3><button data-close aria-label="Close">×</button></div>
+  <div style="padding:10px 16px 0;font-size:13px">
+    <label class="btn ghost" style="display:inline-block;cursor:pointer">📷 Read a screenshot<input type="file" id="myFile" accept="image/*" hidden></label>
+    <span id="myOcr" style="margin-left:8px;color:var(--mute)">Use a screenshot of the Bitunix <b>Positions</b> tab. It's read on this device; nothing is uploaded.</span>
+  </div>
+  <div style="padding:10px 16px;overflow:auto;max-height:52vh"><table class="mytab"><thead><tr><th>Side</th><th>Size (BTC)</th><th>Entry</th><th>Lev.</th><th>Liq. price</th><th></th></tr></thead><tbody id="myRows"></tbody></table>
+    <button class="btn ghost" id="myRow" style="margin-top:6px">+ Add a row</button>
+    <label style="display:block;margin-top:10px;font-size:13px"><input type="checkbox" id="myRepl" checked> Replace my current positions (anything not in this list is marked closed)</label>
+    <details style="margin-top:8px;font-size:12px;color:var(--mute)"><summary>What the screenshot reader saw</summary><pre id="myRaw" style="white-space:pre-wrap;max-height:160px;overflow:auto"></pre></details>
+  </div>
+  <div class="dlgf"><span style="flex:1;font-size:12px;color:var(--mute)">Check every number before saving: screenshot reading can misread digits.</span><button class="btn ghost" data-close>Cancel</button><button class="btn" id="mySave">Save</button></div>
 </div></div>
 <div class="toast" id="toast"></div>
 
@@ -1090,7 +1106,7 @@ function render(){MKH=[];
   for(const st of ovSt){if(st.id==='vol')continue;const R=S.R[st.uid];drawStudy(g,C,st,R,M,i0,i1,cw,0,mainH);
     if(!st.hide){for(const sh of R.shapes||[])drawShapes(g,sh,i0,i1);if(R.bt)drawMarkers(g,C,R.bt,i0,i1)}}
   for(const st of paneSt){const R=S.R[st.uid];if(st.hide)continue;for(const sh of R.shapes||[])drawShapes(g,sh,i0,i1);if(R.bt)drawMarkers(g,C,R.bt,i0,i1)}
-  g.setLineDash([2,3]);for(const a of S.alerts.filter(a=>a.sym===S.sym)){const y=Math.round(M.y(a.price))+.5;g.strokeStyle='#f59f00';g.beginPath();g.moveTo(0,y);g.lineTo(pw,y);g.stroke()}g.setLineDash([]);
+  g.setLineDash([6,4]);for(const p of MY.pos.filter(p=>p.sym===S.sym)){for(const [v,c] of [[p.entry,p.side>0?'#089981':'#f23645'],[p.liq,'#ff6d00']]){if(!v)continue;const y=Math.round(M.y(v))+.5;g.strokeStyle=c;g.beginPath();g.moveTo(0,y);g.lineTo(pw,y);g.stroke()}}g.setLineDash([2,3]);for(const a of S.alerts.filter(a=>a.sym===S.sym)){const y=Math.round(M.y(a.price))+.5;g.strokeStyle='#f59f00';g.beginPath();g.moveTo(0,y);g.lineTo(pw,y);g.stroke()}g.setLineDash([]);
   const dl=(S.draw[S.sym]||[]).slice();if(S.pending)dl.push(S.pending);
   for(const d of dl)drawShape(g,C,d,d===S.sel||d===S.pending);
   g.restore();
@@ -1126,6 +1142,7 @@ function render(){MKH=[];
   g.font='600 12px Inter,system-ui';
   for(const st of ovSt){if(st.hide||st.id==='vol')continue;const R=S.R[st.uid];R.plots.forEach((pl,k)=>{if(!visible(st,k)||pl.o)return;const v=pl.d[n-1];if(v==null)return;const y=M.y(v);if(y>8&&y<mainH-8)tag(g,y,fp(v),pcol(st,k,pl))})}
   for(const a of S.alerts.filter(a=>a.sym===S.sym)){const y=M.y(a.price);if(y>0&&y<mainH)tag(g,y,fp(a.price),'#f59f00')}
+  for(const p of MY.pos.filter(p=>p.sym===S.sym)){let y=M.y(p.entry);if(y>0&&y<mainH)tag(g,y,(p.side>0?'L ':'S ')+fp(p.entry),p.side>0?'#089981':'#f23645');if(p.liq){y=M.y(p.liq);if(y>0&&y<mainH)tag(g,y,'Liq '+fp(p.liq),'#ff6d00')}}
   for(const d of S.draw[S.sym]||[])if(d.type==='hline'){const y=M.y(d.a.p);if(y>0&&y<mainH)tag(g,y,fp(d.a.p),C.acc)}
   if(ly>0&&ly<mainH){tag(g,ly,fp(last.c),lcol);const left=last.t+T-Date.now();if(!S.rp.on&&left>0&&T<=864e5&&ly+28<mainH){const s=Math.floor(left/1e3),hh=Math.floor(s/3600),mm=Math.floor(s%3600/60),ss=s%60;g.font='11px Inter,system-ui';g.fillStyle=lcol;g.fillRect(pw+1,ly+10,AX-2,16);g.fillStyle='#fff';g.fillText((hh?hh+':'+pad(mm):mm)+':'+pad(ss),pw+6,ly+22)}}
   g.font='12px Inter,system-ui,sans-serif';
@@ -1585,10 +1602,135 @@ $('#dTest').addEventListener('click',()=>{try{if(S.dl.notif&&Notification.permis
 
 /* ---------- cloud bot status (when hosted next to the bot's status.json) ---------- */
 function ago(t){const m=Math.round((Date.now()-t)/6e4);return m<1?'just now':m<60?m+' min ago':m<1440?Math.floor(m/60)+' h '+(m%60)+' min ago':Math.floor(m/1440)+' days ago'}
+
+/* ---------- My positions: read from a Bitunix screenshot (on this device, free) or typed in; stored on this device only ---------- */
+// Reads futures positions out of OCR text from an exchange "Positions" screenshot (built for Bitunix, tolerant of other layouts).
+// Returns [{sym, side: 1|-1, size, entry, lev, liq, mark}] - every value is checked by the user before it is saved.
+// Reads futures positions out of OCR text from an exchange "Positions" screenshot (built for Bitunix, tolerant of other layouts).
+// Returns [{sym, side: 1|-1, size, entry, lev, liq, mark}] - every value is checked by the user before it is saved.
+function parsePositions(text, refPrice) {
+  const NUM = /[-+]?(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:[.,]\d+)?/g
+  const toNum = s => { s = s.replace(/\s/g, ''); if (/,\d{3}(\D|$)/.test(s) || /\.\d+,/.test(s)) s = s.replace(/,/g, ''); else s = s.replace(',', '.'); return parseFloat(s) }
+  const nums = l => (l.match(NUM) || []).map(toNum).filter(x => isFinite(x))
+  // OCR often drops the decimal point: 68,7945 -> 68,794.5
+  text = text.replace(/(\d{1,3}),(\d{3})(\d{1,2})(?!\d)/g, '$1,$2.$3')
+  const lines = text.split(/\r?\n/).map(l => l.replace(/[|¦]/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean)
+  const SYM = /\b([A-Z0-9]{2,12})\s*[-/]?\s*(USDT|USDC|USD)\b/i, SIDE = /\b(long|short|buy|sell)\b/i
+  const LAB = [
+    ['liq', /li[qg9](?:uidation)?\.?\s*(?:price)?|est\.?\s*li[qg9]/i],
+    ['entry', /entry|open\s*price|avg\.?\s*(?:open|price)|average/i],
+    ['mark', /mark/i],
+    ['size', /size|qty|quantity|amount|position\s*\(/i],
+    ['margin', /margin(?!\s*ratio)/i],
+    ['ratio', /margin\s*ratio|risk/i],
+    ['pnl', /p\s*n\s*l|unreali[sz]ed|profit/i],
+    ['roe', /roe|roi/i],
+  ]
+  const labelsIn = l => { const found = []; let rest = l
+    // find labels in left-to-right order
+    const hits = []; for (const [k, re] of LAB) { const m = rest.match(re); if (m) hits.push([m.index, k]) }
+    hits.sort((a, b) => a[0] - b[0]); for (const [, k] of hits) if (!found.includes(k)) found.push(k); return found }
+
+  // split into blocks: each starts at a line with a symbol (side on that line or within the next 2 lines)
+  const starts = []
+  lines.forEach((l, i) => { if (SYM.test(l) && (SIDE.test(l) || SIDE.test(lines[i + 1] || '') || SIDE.test(lines[i + 2] || '') || /\d+\s*x\b/i.test(l))) starts.push(i) })
+  const out = []
+  for (let b = 0; b < starts.length; b++) {
+    const blk = lines.slice(starts[b], b + 1 < starts.length ? starts[b + 1] : lines.length)
+    const head = blk.slice(0, 3).join(' ')
+    const sm = head.match(SYM), sd = head.match(SIDE), lv = head.match(/(\d{1,3})\s*[xX×]/)
+    const p = { sym: sm ? (sm[1] + sm[2]).toUpperCase().replace('USD' + 'T', 'USDT') : 'BTCUSDT', side: sd ? (/long|buy/i.test(sd[1]) ? 1 : -1) : 0, lev: lv ? +lv[1] : null }
+    // label rows followed by value rows (or label + value on the same line)
+    for (let i = 0; i < blk.length; i++) {
+      const labs = labelsIn(blk[i]); if (!labs.length) continue
+      const same = nums(blk[i].replace(/\(\s*[A-Z]+\s*\)/g, '').replace(/\d+\s*[xX×]/g, ''))
+      if (labs.length === 1 && same.length >= 1) { if (p[labs[0]] == null) p[labs[0]] = same[same.length - 1]; continue }
+      const next = blk[i + 1] ? nums(blk[i + 1]) : []
+      if (next.length >= labs.length) labs.forEach((k, j) => { if (p[k] == null) p[k] = next[j] })
+      else if (next.length && labs.length) labs.slice(0, next.length).forEach((k, j) => { if (p[k] == null) p[k] = next[j] })
+    }
+    // fallbacks: prices are numbers near the reference price; size is a small number
+    const all = blk.flatMap(nums)
+    const ref = refPrice || p.mark || null
+    if (p.entry == null && ref) { const c = all.filter(x => x > ref * 0.4 && x < ref * 2.5 && Math.abs(x - (p.mark || -1)) > 1e-9); if (c.length) p.entry = c[0] }
+    if (p.size == null) { const c = all.filter(x => x > 0 && x < (ref && ref > 1000 ? 50 : 1e6) && !Number.isInteger(x)); if (c.length) p.size = c[0] }
+    if (p.size != null) p.size = Math.abs(p.size)
+    if (p.liq != null && !(p.liq > 0)) p.liq = null
+    if (!p.side && p.pnl != null && p.entry && ref) p.side = Math.sign(p.pnl) === Math.sign(ref - p.entry) ? 1 : -1
+    if (p.entry > 0 && p.size > 0) out.push({ sym: p.sym, side: p.side || 1, size: p.size, entry: p.entry, lev: p.lev, liq: p.liq || null, mark: p.mark || null })
+  }
+  return out
+}
+
+const MY={pos:store.get('myPos',[]),closed:store.get('myClosed',[]),warned:{}};
+const mySave=()=>{store.set('myPos',MY.pos);store.set('myClosed',MY.closed.slice(-50))};
+const myPx=sym=>sym===S.sym&&S.base.length?S.base[S.base.length-1].c:(S.tick[sym]?.p??null);
+const botDir=b=>/LONG/i.test(b.side)?1:-1;
+function myLevels(){const b=S.base;if(!b.length)return null;const t=b[b.length-1].t;let h7=-Infinity,l7=Infinity,h30=-Infinity,l30=Infinity;
+  for(let i=b.length-1;i>=0&&b[i].t>t-30*864e5;i--){const x=b[i];if(x.t>t-7*864e5){h7=Math.max(h7,x.h);l7=Math.min(l7,x.l)}h30=Math.max(h30,x.h);l30=Math.min(l30,x.l)}
+  return{h7,l7,h30,l30}}
+function myChecks(p,px){const o=[],L=myLevels();
+  if(p.liq){const d=Math.abs(p.liq/px-1)*100;o.push(`Liquidation ${fp(p.liq)} is <b class="${d<6?'dn':''}">${d.toFixed(1)}%</b> away.`);
+    if(L){const lv=p.side>0?L.l30:L.h30;if(p.side>0?p.liq>=lv:p.liq<=lv)o.push(`⚠️ The 30-day ${p.side>0?'low':'high'} (${fp(lv)}) is past your liquidation: a wick back to it would liquidate you.`)}}
+  else o.push('No liquidation price entered. On cross margin it depends on your whole balance, so copy it from Bitunix.');
+  if(L){const ab=[L.h7,L.h30].filter(x=>x>px).sort((a,b)=>a-b)[0],be=[L.l7,L.l30].filter(x=>x<px).sort((a,b)=>b-a)[0];
+    o.push(`Nearest liquidity (7/30-day highs and lows): above ${ab?fp(ab)+' (+'+((ab/px-1)*100).toFixed(1)+'%)':'none'}, below ${be?fp(be)+' (−'+((1-be/px)*100).toFixed(1)+'%)':'none'}.`)}
+  if(window.BOT&&BOT.positions&&p.sym==='BTCUSDT'){const same=BOT.positions.filter(b=>botDir(b)===p.side),opp=BOT.positions.filter(b=>botDir(b)!==p.side);
+    if(!BOT.positions.length)o.push('The bot is flat.');
+    if(same.length)o.push(`The bot agrees: ${same.map(b=>esc(b.part)+' '+b.side.toLowerCase()).join(', ')}.`);
+    if(opp.length)o.push(`The bot is on the other side: ${opp.map(b=>esc(b.part)+' '+b.side.toLowerCase()+' from '+fp(b.entry)).join(', ')}.`)}
+  if(FNG.last){const v=FNG.last.v;o.push(`Fear & Greed ${v} (${esc(FNG.last.c)}): ${p.side>0?(v<=25?'fear favours longs in the B-Hype tests.':'B-Hype longs did best in fear (≤25).'):(v>=75?'greed favours shorts in the B-Hype tests.':'B-Hype shorts did best in greed (≥75).')}`)}
+  {const bs=S.base,k=Math.max(1,Math.round(864e5/(TF[S.tf]||36e5)));let d=0,v=0;for(let i=Math.max(0,bs.length-k);i<bs.length;i++){const b=bs[i];if(b&&b.tb!=null){d+=2*b.tb-b.v;v+=b.v}}
+   if(v>0&&p.sym===S.sym){const r=d/v*100;o.push(`Last 24h: ${r>=0?'buyers':'sellers'} ${Math.abs(r).toFixed(1)}% net ${(r>=0)===(p.side>0)?'(with you)':'(against you)'}.`)}}
+  return o}
+function renderMy(){const box=$('#my');if(!box)return;const P=MY.pos;let net=0,tot=0,h='';
+  h+=`<div class="tools"><button id="myAddS">📷 Add from screenshot</button><button id="myEdit">✏️ Edit / type in</button></div>`;
+  if(!P.length)h+=`<div style="color:var(--mute)">No positions yet. Screenshot your Bitunix <b>Positions</b> tab and add it here. It's read on this device and stays on this device.</div>`;
+  for(const p of P){const px=myPx(p.sym);const pnl=px?p.side*(px-p.entry)*p.size:null,mv=px?p.side*(px/p.entry-1)*100:null;if(p.sym==='BTCUSDT'){net+=p.side*p.size;if(pnl!=null)tot+=pnl}
+    h+=`<div class="pp"><div class="h"><span class="${p.side>0?'up':'dn'}">${p.side>0?'LONG':'SHORT'} ${p.size} ${esc(p.sym.replace('USDT',''))}</span><span class="${pnl>=0?'up':'dn'}">${pnl==null?'–':(pnl>=0?'+':'')+pnl.toFixed(2)+' USDT'}</span></div>
+      <div class="r"><span>Entry <b>${fp(p.entry)}</b>${p.lev?` · ${p.lev}x`:''}</span><span>${mv==null?'':(mv>=0?'+':'')+mv.toFixed(2)+'% move'}</span></div>
+      ${px?`<ul class="ck">${myChecks(p,px).map(x=>`<li>${x}</li>`).join('')}</ul>`:''}
+      <div class="act"><button data-close-pos="${p.id}">Mark closed</button></div></div>`}
+  if(P.length>1)h+=`<div class="net">Combined BTC: ${net>0?'net long':net<0?'net short':'flat'} ${Math.abs(net).toFixed(4)} BTC · P&L <span class="${tot>=0?'up':'dn'}">${(tot>=0?'+':'')+tot.toFixed(2)} USDT</span></div>`;
+  if(MY.closed.length)h+=`<details style="margin-top:6px"><summary style="color:var(--mute)">Closed (${MY.closed.length})</summary>${MY.closed.slice().reverse().slice(0,15).map(c=>`<div class="r" style="display:flex;justify-content:space-between;color:var(--mute)"><span>${c.side>0?'Long':'Short'} ${c.size} @ ${fp(c.entry)} → ${fp(c.exit)}</span><span class="${c.pnl>=0?'up':'dn'}">${(c.pnl>=0?'+':'')+c.pnl.toFixed(2)}</span></div>`).join('')}<div style="font-size:11px;color:var(--mute)">Exit = price when you marked it closed (approximate).</div></details>`;
+  box.innerHTML=h;$('#myChip').textContent='My trades'+(P.length?` · ${P.length}`:'');
+  $('#myAddS').onclick=()=>{openMy();$('#myFile').click()};$('#myEdit').onclick=()=>openMy();
+  box.querySelectorAll('[data-close-pos]').forEach(b=>b.onclick=()=>{const p=MY.pos.find(x=>x.id===b.dataset.closePos);if(!p)return;myClose(p);mySave();renderMy();draw()})}
+function myClose(p){const px=myPx(p.sym)||p.entry;MY.closed.push({...p,exit:px,closed:Date.now(),pnl:p.side*(px-p.entry)*p.size});MY.pos=MY.pos.filter(x=>x!==p)}
+function myCheckWarn(){for(const p of MY.pos){if(!p.liq)continue;const px=myPx(p.sym);if(!px)continue;const d=Math.abs(p.liq/px-1)*100,k=p.id+(d<3?'3':d<6?'6':'');
+  if(d<6&&!MY.warned[k]){MY.warned[k]=1;deliver(`⚠️ Your ${p.side>0?'long':'short'} ${p.size} ${p.sym} is ${d.toFixed(1)}% from liquidation (${fp(p.liq)}).`)}}}
+// edit dialog
+function myRowHtml(p={}){return `<tr><td><select data-k="side"><option value="1" ${p.side!==-1?'selected':''}>Long</option><option value="-1" ${p.side===-1?'selected':''}>Short</option></select></td>
+  <td><input data-k="size" type="number" step="any" value="${p.size??''}"></td><td><input data-k="entry" type="number" step="any" value="${p.entry??''}"></td>
+  <td><input data-k="lev" type="number" step="1" value="${p.lev??''}"></td><td><input data-k="liq" type="number" step="any" value="${p.liq??''}" placeholder="optional"></td><td><button class="btn ghost" data-del>×</button></td></tr>`}
+function openMy(list){$('#myRows').innerHTML=(list||MY.pos).map(myRowHtml).join('')||myRowHtml();$('#myRepl').checked=true;$('#myRaw').textContent='';$('#myOcr').innerHTML="Use a screenshot of the Bitunix <b>Positions</b> tab. It's read on this device; nothing is uploaded.";$('#myM').classList.add('open')}
+$('#myRows').addEventListener('click',e=>{if(e.target.dataset.del!=null)e.target.closest('tr').remove()});
+$('#myRow').onclick=()=>$('#myRows').insertAdjacentHTML('beforeend',myRowHtml());
+$('#mySave').onclick=()=>{const rows=[...$('#myRows').querySelectorAll('tr')].map(tr=>{const g=k=>tr.querySelector(`[data-k="${k}"]`).value;return{side:+g('side'),size:+g('size'),entry:+g('entry'),lev:+g('lev')||null,liq:+g('liq')||null}}).filter(r=>r.size>0&&r.entry>0);
+  const keep=[];for(const r of rows){const old=MY.pos.find(p=>!keep.includes(p)&&p.side===r.side&&Math.abs(p.entry-r.entry)<=r.entry*0.0005&&Math.abs(p.size-r.size)<=r.size*0.05);
+    if(old){Object.assign(old,r);keep.push(old)}else keep.push({id:uid(),sym:'BTCUSDT',opened:Date.now(),...r})}
+  if($('#myRepl').checked){for(const p of MY.pos)if(!keep.includes(p))myClose(p);MY.pos=keep}else MY.pos=MY.pos.concat(keep.filter(p=>!MY.pos.includes(p)));
+  mySave();renderMy();draw();$('#myM').classList.remove('open');toast(`Saved ${MY.pos.length} position${MY.pos.length===1?'':'s'}`)};
+// screenshot reading (Tesseract, bundled with the app, runs on this device)
+let OCRW=null;const loadScript=src=>new Promise((res,rej)=>{const e=document.createElement('script');e.src=src;e.onload=res;e.onerror=()=>rej(new Error('load '+src));document.head.append(e)});
+async function ocrWorker(msg){if(OCRW)return OCRW;msg('Loading the screenshot reader (first time ~8 MB, then cached)…');if(!window.Tesseract)await loadScript('vendor/tesseract/tesseract.min.js');
+  OCRW=await Tesseract.createWorker('eng',1,{workerPath:new URL('vendor/tesseract/worker.min.js',location.href).href,corePath:new URL('vendor/tesseract/',location.href).href,langPath:new URL('vendor/tesseract',location.href).href,gzip:false,logger:m=>{if(m.status==='recognizing text')msg(`Reading… ${Math.round(m.progress*100)}%`)}});return OCRW}
+async function prepImage(file){const img=await createImageBitmap(file),sc=Math.min(2.5,Math.max(1,1800/img.width)),cv=document.createElement('canvas');cv.width=Math.round(img.width*sc);cv.height=Math.round(img.height*sc);
+  const g=cv.getContext('2d');g.drawImage(img,0,0,cv.width,cv.height);const d=g.getImageData(0,0,cv.width,cv.height),a=d.data;let sum=0;for(let i=0;i<a.length;i+=4)sum+=.299*a[i]+.587*a[i+1]+.114*a[i+2];const dark=sum/(a.length/4)<128;
+  for(let i=0;i<a.length;i+=4){let y=Math.max(a[i],a[i+1],a[i+2])*.6+(.299*a[i]+.587*a[i+1]+.114*a[i+2])*.4;if(dark)y=255-y;y=Math.max(0,Math.min(255,(y-60)*1.5));a[i]=a[i+1]=a[i+2]=y}g.putImageData(d,0,0);return cv}
+$('#myFile').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const msg=t=>$('#myOcr').textContent=t;
+  try{const w=await ocrWorker(msg);msg('Preparing the image…');const cv=await prepImage(f);const {data}=await w.recognize(cv);$('#myRaw').textContent=data.text;
+    const ref=myPx('BTCUSDT')||S.tick.BTCUSDT?.p||null;const found=parsePositions(data.text,ref);
+    if(!found.length){msg('Couldn’t find positions in that picture. Use the Positions tab screenshot, or type them in below.');return}
+    $('#myRows').innerHTML=found.map(myRowHtml).join('');msg(`Found ${found.length} position${found.length===1?'':'s'}. Check each number against Bitunix, fix anything misread, then Save.`)}
+  catch(err){msg('The screenshot reader couldn’t load ('+(err.message||err)+'). Check your connection, or type the positions in below.')}});
+$('#myChip').addEventListener('click',e=>{e.stopPropagation();$('#side').classList.add('open');$('#myBox').scrollIntoView({block:'start'})});
+
 async function loadBot(){
   if(!/^https?:$/.test(location.protocol))return;
   let st,al=[];try{const r=await fetch('status.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;st=await r.json()}catch(e){return}
   try{const r=await fetch('alerts.json?'+Date.now(),{cache:'no-store'});if(r.ok)al=await r.json()}catch(e){}
+  window.BOT=st;renderMy();
   const late=Date.now()-st.checked>2.5*36e5;
   $('#botBox').hidden=false;$('#botChip').hidden=false;$('#botChip').className='tb '+(late?'bad':'ok');$('#botChip').textContent=(late?'Bot late':'Bot ✓')+' · '+(st.positions.length?st.positions.length+' open':'flat');
   $('#bot').innerHTML=`${st.paused?'<div class="warn">Alerts are paused in Bot settings.</div>':''}<div class="st">Last check <b>${ago(st.checked)}</b> · BTC ${fp(st.price)} · ${esc(st.sizing||'')}${st.balance?` · balance ${money(st.balance)}`:''}</div>${late?'<div class="warn">The bot hasn’t checked in over 2 hours. Open your GitHub repo → Actions to see why.</div>':''}`+
@@ -1649,7 +1791,7 @@ $('#bsTest').addEventListener('click',async()=>{if(!ghTok())return bsMsg('Connec
 new ResizeObserver(draw).observe(wrap);
 new MutationObserver(()=>{draw();drawEquity()}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{draw();drawEquity()})}catch(e){}
-setInterval(()=>{if(!S.drag)draw();renderStats()},1000);setInterval(pollTickers,15000);
+setInterval(()=>{if(!S.drag)draw();renderStats()},1000);setInterval(()=>{renderMy();myCheckWarn()},5000);setInterval(pollTickers,15000);
 if(!store.get('algo1',false)){store.set('algo1',true);let sc=S.scripts.find(s=>s.name===ORIG.name);if(!sc){sc={id:uid(),name:ORIG.name,code:ORIG.code};S.scripts.unshift(sc);store.set('scripts',S.scripts)}
   S.sym='BTCUSDT';S.tf='4h';S.depth='2020';store.set('sym',S.sym);store.set('tf',S.tf);store.set('depth','2020');$('#sym').value=S.sym;$('#hist').value='2020';
   if(!S.studies.some(s=>s.sid===sc.id)){S.studies.push({uid:uid(),id:'script',sid:sc.id,p:{}});saveStudies()}S.curScript=sc.id;S.panel={open:true,tab:'tester',h:340};}
@@ -1668,7 +1810,7 @@ if(!store.get('algo12',false)){store.set('algo12',true);for(const sc of S.script
 if(/^https?:$/.test(location.protocol)&&!store.get('app1',false)){store.set('app1',true);const v2=S.scripts.find(x=>x.name==='All-in-one v2 · BTC futures');
   S.sym='BTCUSDT';S.tf='1h';S.depth='all';store.set('sym','BTCUSDT');store.set('tf','1h');store.set('depth','all');$('#sym').value='BTCUSDT';$('#hist').value='all';
   if(v2){S.studies=[{uid:'s1',id:'vol',p:{}},{uid:uid(),id:'script',sid:v2.id,p:{}}];saveStudies();S.curScript=v2.id}S.lgMin=true;store.set('lgMin',true);S.panel={open:innerWidth>860,tab:'tester',h:300}}
-renderRail();markTF();markLog();renderAlerts();renderScriptSel();selectScript(S.scripts[0]?.id);layoutPanel();renderTester();buildLegend();
+renderRail();markTF();markLog();renderAlerts();renderMy();renderScriptSel();selectScript(S.scripts[0]?.id);layoutPanel();renderTester();buildLegend();
 load().then(pollTickers);loadFNG();setInterval(loadFNG,36e5);
 loadBot();setInterval(loadBot,3e5);
 try{if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}
