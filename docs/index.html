@@ -60,6 +60,7 @@ select.tb{border:0;background:transparent;appearance:none}
 .lrow{display:flex;align-items:center;gap:8px;pointer-events:auto;width:max-content;max-width:100%;padding:0 2px;border-radius:4px}
 .lrow:hover{background:color-mix(in srgb,var(--bg) 80%,transparent);box-shadow:0 0 0 1px var(--line)}
 .lrow.off{opacity:.45}
+.lrow,.lrow .lv,.lohlc,.lt{pointer-events:none}.lrow .ln,.lrow .lb,.lrow button,#lgTog{pointer-events:auto}
 .ln{white-space:nowrap}
 .lv{display:flex;gap:8px;flex-wrap:wrap}
 .lerr{color:var(--dn)}
@@ -1275,8 +1276,22 @@ $('#rail').addEventListener('click',e=>{const k=e.target.closest('button')?.data
   renderRail();draw()});
 
 const pos=e=>{const r=cv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}};
+/* two-finger pinch: sideways = zoom time, up/down = stretch price scale; the midpoint moves the chart (two-finger pan) */
+const PT=new Map();let PINCH=null;
+const pinchStart=()=>{const [a,b]=[...PT.values()];const dx=Math.abs(a.x-b.x),dy=Math.abs(a.y-b.y),mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
+  PINCH={dx:Math.max(dx,20),dy:Math.max(dy,20),vert:dy>dx*1.6,mx,my,bw:S.bw,ys:S.ys,yo:S.yo||0,anchor:L.start+mx/S.bw}};
+cv.addEventListener('pointerdown',e=>{PT.set(e.pointerId,pos(e));if(PT.size===2&&L&&S.c.length){S.drag=null;S.pending=null;closePop();pinchStart()}});
+cv.addEventListener('pointermove',e=>{if(!PT.has(e.pointerId))return;PT.set(e.pointerId,pos(e));if(!PINCH||PT.size<2)return;e.preventDefault();e.stopImmediatePropagation();
+  const [a,b]=[...PT.values()],dx=Math.max(Math.abs(a.x-b.x),20),dy=Math.max(Math.abs(a.y-b.y),20),mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
+  if(PINCH.vert){S.ys=Math.max(.05,Math.min(20,PINCH.ys*PINCH.dy/dy))}
+  else{S.bw=Math.max(1.5,Math.min(80,PINCH.bw*dx/PINCH.dx))}
+  S.end=PINCH.anchor-mx/S.bw+L.pw/S.bw;
+  if(L.mainH)S.yo=PINCH.yo+(my-PINCH.my)/L.mainH*1.18;
+  draw()},{passive:false});
+const pinchEnd=e=>{PT.delete(e.pointerId);if(PT.size<2)PINCH=null};
+cv.addEventListener('pointerup',pinchEnd);cv.addEventListener('pointercancel',pinchEnd);
 cv.addEventListener('pointerdown',e=>{
-  if(!L||!S.c.length)return;const m=pos(e);S.mouse=m;cv.setPointerCapture(e.pointerId);
+  if(!L||!S.c.length||PT.size>1)return;const m=pos(e);S.mouse=m;cv.setPointerCapture(e.pointerId);
   if(m.x>=L.pw){S.drag={axis:true,y:m.y,ys:S.ys};return}
   if(m.y>=L.H-TAX){S.drag={taxis:true,x:m.x,bw:S.bw,end:S.end};return}
   if(S.rp.pick){const i=Math.round(L.start+m.x/S.bw-.5);startReplay(Math.max(20,Math.min(S.base.length-2,i)));return}
@@ -1294,7 +1309,7 @@ cv.addEventListener('pointerdown',e=>{
   if(h){S.sel=h.d;pushHist();const d=h.d;S.drag={shape:d,h:h.h,start:ptAt(m.x,m.y),a:{...d.a},b:d.b&&{...d.b},c:d.c&&{...d.c}};draw();return}
   S.sel=null;S.drag={pan:true,x:m.x,y:m.y,end:S.end,yo:S.yo||0,v:inMain};draw();
 });
-cv.addEventListener('pointermove',e=>{
+cv.addEventListener('pointermove',e=>{if(PINCH)return;
   const m=pos(e);S.mouse=m;const D=S.drag;
   if(D?.pan){S.end=D.end-(m.x-D.x)/S.bw;if(D.v)S.yo=D.yo+(m.y-D.y)/L.mainH*1.18}
   else if(D?.axis)S.ys=Math.max(.05,Math.min(20,D.ys*Math.exp((m.y-D.y)/150)));
