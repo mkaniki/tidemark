@@ -1,7 +1,7 @@
 {
- "checked": 1795695640585,
- "lastBar": 1795690800000,
- "price": 60714.01,
+ "checked": 1795698566041,
+ "lastBar": 1795694400000,
+ "price": 60825.37,
  "sizing": "Growth: 3% risk, 50% weekly",
  "paused": false,
  "parts": {
@@ -16,7 +16,7 @@
    "since": 1794182400000,
    "entry": 74791.558848,
    "stop": 89821.728,
-   "unrealisedPct": 18.822376568738207
+   "unrealisedPct": 18.673482760780125
   }
  ]
 }
