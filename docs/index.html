@@ -49,7 +49,7 @@ select.tb{border:0;background:transparent;appearance:none}
 .rail button:hover{background:var(--hov);color:var(--ink)}
 .rail button.on{color:var(--acc);background:color-mix(in srgb,var(--acc) 12%,transparent)}
 .rail hr{width:24px;border:0;border-top:1px solid var(--line);margin:4px 0;flex:none}
-.chart{position:relative;min-height:0;touch-action:none;overflow:hidden}
+.chart{position:relative;min-height:0;touch-action:none;overflow:hidden;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .chart canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #lg{position:absolute;inset:0;pointer-events:none;font-size:13px;line-height:1.5}
 .lblock{position:absolute;left:8px;max-width:calc(100% - 96px)}
@@ -179,6 +179,21 @@ table.t{width:100%;border-collapse:collapse;font-size:13px}
 .rp button:hover{background:var(--hov)}
 .rp select{height:30px;border:0;background:transparent}
 .rp span{color:var(--mute);font-size:12px;padding:0 6px;white-space:nowrap}
+/* right-click menu (TradingView-style) */
+.cm{position:fixed;z-index:60;min-width:236px;max-width:min(360px,calc(100vw - 12px));background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 34px rgba(0,0,0,.28);padding:4px 0;font-size:14px;outline:none;user-select:none}
+.cm hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.cmi{display:flex;align-items:center;gap:10px;width:100%;height:34px;padding:0 14px 0 10px;border-radius:0;text-align:left;white-space:nowrap;color:var(--ink)}
+.cmi:focus-visible{outline:none}
+.cmi.act{background:var(--hov)}
+.cmi:disabled{color:var(--mute);opacity:.55;cursor:default}
+.cmic{width:18px;height:18px;flex:none;display:grid;place-items:center;color:var(--mute)}
+.cmi[aria-checked=true] .cmic{color:var(--acc)}
+.cml{flex:1;overflow:hidden;text-overflow:ellipsis}
+.cmk{font:inherit;font-size:12px;color:var(--mute);padding-left:16px}
+.cmsw{display:flex;gap:8px;padding:8px 12px 6px 38px;flex-wrap:wrap}
+.cmsw button{width:22px;height:22px;border-radius:50%;box-shadow:0 0 0 1px var(--line)}
+.cmsw button.on,.cmsw button:hover{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ink)}
+@media (pointer:coarse){.cmi{height:42px}}
 #wlBtn{display:none}
 @media (max-width:980px){.edw{grid-template-columns:minmax(0,1fr)}.ref{display:none}.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media (max-width:860px){
@@ -311,6 +326,11 @@ table.t{width:100%;border-collapse:collapse;font-size:13px}
     <details style="margin-top:8px;font-size:12px;color:var(--mute)"><summary>What the screenshot reader saw</summary><pre id="myRaw" style="white-space:pre-wrap;max-height:160px;overflow:auto"></pre></details>
   </div>
   <div class="dlgf"><span style="flex:1;font-size:12px;color:var(--mute)">Check every number before saving: screenshot reading can misread digits.</span><button class="btn ghost" data-close>Cancel</button><button class="btn" id="mySave">Save</button></div>
+</div></div>
+<div class="modal" id="csM"><div class="dlg" role="dialog" aria-label="Chart settings" style="max-width:460px">
+  <div class="dlgh"><h3>Chart settings</h3><button data-close aria-label="Close">×</button></div>
+  <div class="form" id="csF"></div>
+  <div class="dlgf"><button class="btn ghost" id="csDef">Defaults</button><span style="flex:1"></span><button class="btn ghost" data-close>Cancel</button><button class="btn" id="csOk">OK</button></div>
 </div></div>
 <div class="toast" id="toast"></div>
 
@@ -810,7 +830,8 @@ const optimize=s=>s; // placeholder for future
 /* ---------- state ---------- */
 const S={sym:store.get('sym','BTCUSDT'),tf:store.get('tf','1h'),type:store.get('type','candles'),log:store.get('log',false),
   wl:store.get('wl',['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT','LINKUSDT','LTCUSDT']),
-  draw:store.get('draw',{}),alerts:store.get('alerts',[]),magnet:store.get('magnet',true),
+  draw:store.get('draw',{}),alerts:store.get('alerts',[]),magnet:store.get('magnet',true),inv:store.get('inv',false),hideDraw:store.get('hideDraw',false),
+  cs:Object.assign({theme:'auto',up:'',dn:'',grid:'both',priceLine:true,countdown:true,ohlc:true},store.get('chartSet',{})),clip:null,
   studies:store.get('studies',[{uid:'s1',id:'vol',p:{}},{uid:'s2',id:'ema',p:{}},{uid:'s3',id:'rsi',p:{}}]),
   scripts:store.get('scripts',null),panel:store.get('panel',{open:false,tab:'editor',h:320}),
   depth:store.get('depth','1000'),dl:Object.assign({notif:true,sound:true,ntfy:'',tgTok:'',tgChat:'',hook:'',evEntry:true,evTp:true,evSl:true,evExit:true,evMove:true},store.get('dl',{})),alog:store.get('alog',[]),seen:new Set(),tool:'cursor',base:[],c:[],ha:[],D:null,R:{},end:0,bw:8,ys:1,live:false,tick:{},mouse:null,pending:null,sel:null,drag:null,hist:[],
@@ -1018,9 +1039,9 @@ const AX=72,TAX=28;
 const ms=()=>TF[S.tf];
 const idxOf=t=>S.c.length?(t-S.c[0].t)/ms():0;
 const timeOf=i=>S.c.length?S.c[0].t+i*ms():0;
-function scale(top,h,lo,hi,log){
-  if(log&&lo>0){const a=Math.log(lo),b=Math.log(hi);return{top,h,lo,hi,log,y:p=>top+(b-Math.log(Math.max(p,1e-12)))/(b-a)*h,p:y=>Math.exp(b-(y-top)/h*(b-a))}}
-  return{top,h,lo,hi,y:p=>top+(hi-p)/(hi-lo)*h,p:y=>hi-(y-top)/h*(hi-lo)};
+function scale(top,h,lo,hi,log,inv){
+  if(log&&lo>0){const a=Math.log(lo),b=Math.log(hi);return{top,h,lo,hi,log,inv,y:p=>{const v=Math.log(Math.max(p,1e-12));return top+(inv?v-a:b-v)/(b-a)*h},p:y=>Math.exp(inv?a+(y-top)/h*(b-a):b-(y-top)/h*(b-a))}}
+  return{top,h,lo,hi,inv,y:p=>top+(inv?p-lo:hi-p)/(hi-lo)*h,p:y=>inv?lo+(y-top)/h*(hi-lo):hi-(y-top)/h*(hi-lo)};
 }
 const X=i=>(i-L.start+.5)*S.bw;
 const scr=pt=>({x:X(idxOf(pt.t)),y:L.M.y(pt.p)});
@@ -1056,7 +1077,7 @@ let MKH=[];
 function render(){MKH=[];
   raf=0;const W=wrap.clientWidth,H=wrap.clientHeight,dpr=devicePixelRatio||1;if(!W||!H)return;
   if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr)}
-  const g=cv.getContext('2d'),C=pal();g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle=C.bg;g.fillRect(0,0,W,H);
+  const g=cv.getContext('2d'),C=pal();if(S.cs.up)C.up=S.cs.up;if(S.cs.dn)C.dn=S.cs.dn;g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle=C.bg;g.fillRect(0,0,W,H);
   g.font='12px Inter,system-ui,sans-serif';
   const c=S.c,n=c.length;
   if(!n){g.fillStyle=C.mute;g.textAlign='center';g.font='15px Inter,system-ui';g.fillText('Loading '+S.sym+'…',W/2,H/2);return}
@@ -1071,18 +1092,19 @@ function render(){MKH=[];
   let[lo,hi]=acc;if(!isFinite(lo)){lo=c[n-1].l;hi=c[n-1].h}
   const hasVol=ovSt.some(st=>st.id==='vol'&&!st.hide),volPad=hasVol?.18:0;
   let M;
-  if(S.log&&lo>0){const a=Math.log(lo),b=Math.log(hi),sp=((b-a)||.01),mid=(a+b)/2+(S.yo||0)*sp*S.ys,half=(sp/2)*S.ys;M=scale(0,mainH,Math.exp(mid-half-sp*(.08+volPad)),Math.exp(mid+half+sp*.1),true)}
-  else{const span=hi-lo||hi*.01||1,mid=(lo+hi)/2+(S.yo||0)*span*S.ys,half=span/2*S.ys;M=scale(0,mainH,mid-half-span*(.08+volPad),mid+half+span*.1)}
+  if(S.log&&lo>0){const a=Math.log(lo),b=Math.log(hi),sp=((b-a)||.01),mid=(a+b)/2+(S.yo||0)*sp*S.ys,half=(sp/2)*S.ys;M=scale(0,mainH,Math.exp(mid-half-sp*(.08+volPad)),Math.exp(mid+half+sp*.1),true,S.inv)}
+  else{const span=hi-lo||hi*.01||1,mid=(lo+hi)/2+(S.yo||0)*span*S.ys,half=span/2*S.ys;M=scale(0,mainH,mid-half-span*(.08+volPad),mid+half+span*.1,false,S.inv)}
   L.M=M;L.panes.push({top:0,h:mainH,sc:M,main:true});
 
   const step=nice((M.hi-M.lo)/Math.max(2,mainH/56)),pd=Math.max(0,-Math.floor(Math.log10(step))),ticks=[];
   if(M.log){const a=Math.log(M.lo),b=Math.log(M.hi),cnt=Math.max(2,Math.floor(mainH/56));for(let j=1;j<cnt;j++){const raw=Math.exp(a+(b-a)*j/cnt),st=nice(raw/20);ticks.push(Math.round(raw/st)*st)}}
   else for(let p=Math.ceil(M.lo/step)*step;p<=M.hi;p+=step)ticks.push(p);
-  g.lineWidth=1;g.strokeStyle=C.grid;for(const p of ticks){const y=Math.round(M.y(p))+.5;g.beginPath();g.moveTo(0,y);g.lineTo(pw,y);g.stroke()}
+  const gH=S.cs.grid==='both'||S.cs.grid==='h',gV=S.cs.grid==='both'||S.cs.grid==='v';
+  g.lineWidth=1;g.strokeStyle=C.grid;if(gH)for(const p of ticks){const y=Math.round(M.y(p))+.5;g.beginPath();g.moveTo(0,y);g.lineTo(pw,y);g.stroke()}
   const T=ms(),cands=[6e4,3e5,9e5,18e5,36e5,72e5,108e5,216e5,432e5,864e5,1728e5,6048e5,12096e5,2592e6,7776e6,15552e6,31536e6];
   const tstep=cands.find(s=>s>=T&&s/T*S.bw>=96)||31536e6,tt=[];
   for(let t=Math.floor(timeOf(start)/tstep)*tstep;t<=timeOf(S.end);t+=tstep){const x=X(idxOf(t));if(x>=-20&&x<=pw+20)tt.push([t,x])}
-  g.strokeStyle=C.grid;for(const[,x]of tt){const xx=Math.round(x)+.5;g.beginPath();g.moveTo(xx,0);g.lineTo(xx,H-TAX);g.stroke()}
+  g.strokeStyle=C.grid;if(gV)for(const[,x]of tt){const xx=Math.round(x)+.5;g.beginPath();g.moveTo(xx,0);g.lineTo(xx,H-TAX);g.stroke()}
 
   g.save();g.beginPath();g.rect(0,0,pw,mainH);g.clip();
   const bw=S.bw,cw=Math.max(1,Math.min(bw*.72,bw-1));
@@ -1108,12 +1130,12 @@ function render(){MKH=[];
     if(!st.hide){for(const sh of R.shapes||[])drawShapes(g,sh,i0,i1);if(R.bt)drawMarkers(g,C,R.bt,i0,i1)}}
   for(const st of paneSt){const R=S.R[st.uid];if(st.hide)continue;for(const sh of R.shapes||[])drawShapes(g,sh,i0,i1);if(R.bt)drawMarkers(g,C,R.bt,i0,i1)}
   g.setLineDash([6,4]);for(const p of MY.pos.filter(p=>p.sym===S.sym)){for(const [v,c] of [[p.entry,p.side>0?'#089981':'#f23645'],[p.liq,'#ff6d00']]){if(!v)continue;const y=Math.round(M.y(v))+.5;g.strokeStyle=c;g.beginPath();g.moveTo(0,y);g.lineTo(pw,y);g.stroke()}}g.setLineDash([2,3]);for(const a of S.alerts.filter(a=>a.sym===S.sym)){const y=Math.round(M.y(a.price))+.5;g.strokeStyle='#f59f00';g.beginPath();g.moveTo(0,y);g.lineTo(pw,y);g.stroke()}g.setLineDash([]);
-  const dl=(S.draw[S.sym]||[]).slice();if(S.pending)dl.push(S.pending);
+  const dl=S.hideDraw?[]:(S.draw[S.sym]||[]).slice();if(S.pending)dl.push(S.pending);
   for(const d of dl)drawShape(g,C,d,d===S.sel||d===S.pending);
   g.restore();
 
   const last=c[n-1],lb=B[n-1],ly=Math.round(M.y(last.c))+.5,lcol=last.c>=(S.type==='ha'?lb.o:last.o)?C.up:C.dn;
-  g.setLineDash([1,3]);g.strokeStyle=lcol;g.beginPath();g.moveTo(0,ly);g.lineTo(pw,ly);g.stroke();g.setLineDash([]);
+  if(S.cs.priceLine){g.setLineDash([1,3]);g.strokeStyle=lcol;g.beginPath();g.moveTo(0,ly);g.lineTo(pw,ly);g.stroke();g.setLineDash([])}
 
   // panes
   paneSt.forEach((st,j)=>{
@@ -1121,7 +1143,7 @@ function render(){MKH=[];
     let lo2,hi2;if(R.range){[lo2,hi2]=R.range}else{const a=[Infinity,-Infinity];plotRange(st,R,i0,i1,a);for(const l of R.levels||[]){if(a[0]<=l.p*1.5&&l.p<=a[1]*1.5){a[0]=Math.min(a[0],l.p);a[1]=Math.max(a[1],l.p)}}if(!isFinite(a[0])){a[0]=-1;a[1]=1}if(a[0]===a[1]){a[0]-=1;a[1]+=1}const sp=a[1]-a[0];lo2=a[0]-sp*.08;hi2=a[1]+sp*.08}
     const sc=scale(top+4,h-8,lo2,hi2);L.panes.push({top,h,sc,uid:st.uid});
     g.save();g.beginPath();g.rect(0,top,pw,h);g.clip();
-    for(const t of tt){const xx=Math.round(t[1])+.5;g.strokeStyle=C.grid;g.beginPath();g.moveTo(xx,top);g.lineTo(xx,top+h);g.stroke()}
+    if(gV)for(const t of tt){const xx=Math.round(t[1])+.5;g.strokeStyle=C.grid;g.beginPath();g.moveTo(xx,top);g.lineTo(xx,top+h);g.stroke()}
     if(R.band&&!st.hide){g.fillStyle=alpha(pcol(st,0,R.plots[0]||{c:C.acc}),.07);const y1=sc.y(R.band[0]),y2=sc.y(R.band[1]);g.fillRect(0,Math.min(y1,y2),pw,Math.abs(y2-y1))}
     g.setLineDash([3,3]);for(const l of R.levels||[]){const y=Math.round(sc.y(l.p))+.5;g.strokeStyle=l.c?alpha(l.c,.8):C.cross;g.beginPath();g.moveTo(0,y);g.lineTo(pw,y);g.stroke()}g.setLineDash([]);
     drawStudy(g,C,st,R,sc,i0,i1,cw,top,h);g.restore();
@@ -1144,8 +1166,8 @@ function render(){MKH=[];
   for(const st of ovSt){if(st.hide||st.id==='vol')continue;const R=S.R[st.uid];R.plots.forEach((pl,k)=>{if(!visible(st,k)||pl.o)return;const v=pl.d[n-1];if(v==null)return;const y=M.y(v);if(y>8&&y<mainH-8)tag(g,y,fp(v),pcol(st,k,pl))})}
   for(const a of S.alerts.filter(a=>a.sym===S.sym)){const y=M.y(a.price);if(y>0&&y<mainH)tag(g,y,fp(a.price),'#f59f00')}
   for(const p of MY.pos.filter(p=>p.sym===S.sym)){let y=M.y(p.entry);if(y>0&&y<mainH)tag(g,y,(p.side>0?'L ':'S ')+fp(p.entry),p.side>0?'#089981':'#f23645');if(p.liq){y=M.y(p.liq);if(y>0&&y<mainH)tag(g,y,'Liq '+fp(p.liq),'#ff6d00')}}
-  for(const d of S.draw[S.sym]||[])if(d.type==='hline'){const y=M.y(d.a.p);if(y>0&&y<mainH)tag(g,y,fp(d.a.p),C.acc)}
-  if(ly>0&&ly<mainH){tag(g,ly,fp(last.c),lcol);const left=last.t+T-Date.now();if(!S.rp.on&&left>0&&T<=864e5&&ly+28<mainH){const s=Math.floor(left/1e3),hh=Math.floor(s/3600),mm=Math.floor(s%3600/60),ss=s%60;g.font='11px Inter,system-ui';g.fillStyle=lcol;g.fillRect(pw+1,ly+10,AX-2,16);g.fillStyle='#fff';g.fillText((hh?hh+':'+pad(mm):mm)+':'+pad(ss),pw+6,ly+22)}}
+  if(!S.hideDraw)for(const d of S.draw[S.sym]||[])if(d.type==='hline'){const y=M.y(d.a.p);if(y>0&&y<mainH)tag(g,y,fp(d.a.p),C.acc)}
+  if(ly>0&&ly<mainH){tag(g,ly,fp(last.c),lcol);const left=last.t+T-Date.now();if(S.cs.countdown&&!S.rp.on&&left>0&&T<=864e5&&ly+28<mainH){const s=Math.floor(left/1e3),hh=Math.floor(s/3600),mm=Math.floor(s%3600/60),ss=s%60;g.font='11px Inter,system-ui';g.fillStyle=lcol;g.fillRect(pw+1,ly+10,AX-2,16);g.fillStyle='#fff';g.fillText((hh?hh+':'+pad(mm):mm)+':'+pad(ss),pw+6,ly+22)}}
   g.font='12px Inter,system-ui,sans-serif';
 
   const m=S.mouse;
@@ -1182,7 +1204,7 @@ function buildLegend(){
 }
 function legendValues(){
   const n=S.c.length;if(!n||!L)return;const i=hover(),b=(S.type==='ha'?S.ha:S.c)[i],prev=S.c[i-1]||b,ch=b.c-prev.c,pct=ch/prev.c*100,cls=ch>=0?'up':'dn',d=dec(b.c);
-  const o=$('#ohlc');if(o)o.innerHTML=`<span><b>O</b><span class="${cls}">${fp(b.o,d)}</span></span><span><b>H</b><span class="${cls}">${fp(b.h,d)}</span></span><span><b>L</b><span class="${cls}">${fp(b.l,d)}</span></span><span><b>C</b><span class="${cls}">${fp(b.c,d)}</span></span><span class="${cls}">${ch>=0?'+':''}${fp(ch,d)} (${pct>=0?'+':''}${pct.toFixed(2)}%)</span>`;
+  const o=$('#ohlc');if(o)o.style.display=S.cs.ohlc?'':'none';if(o)o.innerHTML=`<span><b>O</b><span class="${cls}">${fp(b.o,d)}</span></span><span><b>H</b><span class="${cls}">${fp(b.h,d)}</span></span><span><b>L</b><span class="${cls}">${fp(b.l,d)}</span></span><span><b>C</b><span class="${cls}">${fp(b.c,d)}</span></span><span class="${cls}">${ch>=0?'+':''}${fp(ch,d)} (${pct>=0?'+':''}${pct.toFixed(2)}%)</span>`;
   for(const st of S.studies){const R=S.R[st.uid],el=document.querySelector(`[data-v="${st.uid}"]`);if(!R||!el||R.err)continue;
     el.innerHTML=R.plots.map((p,k)=>{if(!visible(st,k))return'';const v=p.d[i-(p.o||0)];const col=(p.cols&&p.cols[i])||pcol(st,k,p);return `<span style="color:${col}">${v==null?'∅':p.t==='vol'?fv(v):R.ov&&st.id!=='vol'?fp(v,d):fnum(v)}</span>`}).join('')}
   for(const p of L.panes)if(!p.main){const el=document.querySelector(`[data-pane="${p.uid}"]`);if(el)el.style.top=(p.top+4)+'px'}
@@ -1227,6 +1249,7 @@ function drawShape(g,C,d,sel){
 const handles=d=>d.type==='hline'||d.type==='vline'||d.type==='text'?['a']:['a','b','c'].filter(k=>d[k]);
 function segDist(px,py,a,b){const dx=b.x-a.x,dy=b.y-a.y,l=dx*dx+dy*dy;let t=l?((px-a.x)*dx+(py-a.y)*dy)/l:0;t=Math.max(0,Math.min(1,t));return Math.hypot(px-a.x-t*dx,py-a.y-t*dy)}
 function hit(mx,my){
+  if(S.hideDraw)return null;
   for(const d of (S.draw[S.sym]||[]).slice().reverse()){
     for(const k of handles(d)){const p=scr(d[k]);if(Math.hypot(mx-p.x,my-p.y)<9)return{d,h:k}}
     const a=scr(d.a),b=d.b?scr(d.b):a;let on=false;const inBox=(p,q)=>mx>=Math.min(p.x,q.x)-4&&mx<=Math.max(p.x,q.x)+4&&my>=Math.min(p.y,q.y)-4&&my<=Math.max(p.y,q.y)+4;
@@ -1260,18 +1283,23 @@ const TOOLS=[
   ['hr'],
   ['magnet','Magnet: snap to open/high/low/close','<path d="M4 3v6a5 5 0 0010 0V3"/><path d="M4 6h3M11 6h3"/>'],
   ['undo','Undo (Ctrl+Z)','<path d="M5 7h7a4 4 0 010 8H8"/><path d="M8 4L5 7l3 3"/>'],
+  ['hidedraw','Hide all drawings','<path d="M1.5 9s3-5.5 7.5-5.5S16.5 9 16.5 9s-3 5.5-7.5 5.5S1.5 9 1.5 9z"/><circle cx="9" cy="9" r="2.2"/>'],
   ['clear','Remove all drawings on this symbol','<path d="M3 5h12M7 5V3h4v2M5 5l1 11h6l1-11"/>'],
-  ['fit','Reset view (double-click chart)','<path d="M2 6V2h4M12 2h4v4M16 12v4h-4M6 16H2v-4"/>']];
-function renderRail(){$('#rail').innerHTML=TOOLS.map(([k,t,p])=>k==='hr'?'<hr>':`<button data-k="${k}" title="${t}" aria-label="${t}" class="${S.tool===k||(k==='magnet'&&S.magnet)?'on':''}"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">${p}</svg></button>`).join('')}
+  ['fit','Reset chart view (Alt+R or double-click the chart)','<path d="M2 6V2h4M12 2h4v4M16 12v4h-4M6 16H2v-4"/>']];
+function renderRail(){$('#rail').innerHTML=TOOLS.map(([k,t,p])=>k==='hr'?'<hr>':`<button data-k="${k}" title="${t}" aria-label="${t}" class="${S.tool===k||(k==='magnet'&&S.magnet)||(k==='hidedraw'&&S.hideDraw)?'on':''}"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">${p}</svg></button>`).join('')}
 const saveDraw=()=>store.set('draw',S.draw);
 function pushHist(){S.hist.push(JSON.stringify(S.draw[S.sym]||[]));if(S.hist.length>60)S.hist.shift()}
-function undo(){if(!S.hist.length)return toast('Nothing to undo');S.draw[S.sym]=JSON.parse(S.hist.pop());S.sel=null;saveDraw();draw()}
-function commit(d){delete d.stage;pushHist();(S.draw[S.sym]=S.draw[S.sym]||[]).push(d);S.sel=d;S.pending=null;S.tool='cursor';renderRail();saveDraw();draw()}
+function pushStudyHist(){S.hist.push({studies:JSON.stringify(S.studies.map(({uid,id,p,hide,colors,off,sid})=>({uid,id,p,hide,colors,off,sid})))});if(S.hist.length>60)S.hist.shift()}
+function undo(){if(!S.hist.length)return toast('Nothing to undo');const h=S.hist.pop();
+  if(h&&h.studies){S.studies=JSON.parse(h.studies);saveStudies();recalc(true);buildLegend();renderTester();draw();return}
+  S.draw[S.sym]=JSON.parse(h);S.sel=null;saveDraw();draw()}
+function commit(d){delete d.stage;if(S.hideDraw){S.hideDraw=false;store.set('hideDraw',false)}pushHist();(S.draw[S.sym]=S.draw[S.sym]||[]).push(d);S.sel=d;S.pending=null;S.tool='cursor';renderRail();saveDraw();draw()}
 $('#rail').addEventListener('click',e=>{const k=e.target.closest('button')?.dataset.k;if(!k)return;
   if(k==='magnet'){S.magnet=!S.magnet;store.set('magnet',S.magnet)}
   else if(k==='undo')undo();
-  else if(k==='clear'){if((S.draw[S.sym]||[]).length){pushHist();S.draw[S.sym]=[];S.sel=null;saveDraw();toast('Drawings cleared. Ctrl+Z to undo.')}}
-  else if(k==='fit'){S.end=S.c.length+8;S.bw=8;S.ys=1;S.yo=0}
+  else if(k==='clear')removeDrawings();
+  else if(k==='hidedraw')toggleHideDraw();
+  else if(k==='fit')resetView();
   else{S.tool=k;S.pending=null}
   renderRail();draw()});
 
@@ -1280,18 +1308,19 @@ const pos=e=>{const r=cv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.c
 const PT=new Map();let PINCH=null;
 const pinchStart=()=>{const [a,b]=[...PT.values()];const dx=Math.abs(a.x-b.x),dy=Math.abs(a.y-b.y),mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
   PINCH={dx:Math.max(dx,20),dy:Math.max(dy,20),vert:dy>dx*1.6,mx,my,bw:S.bw,ys:S.ys,yo:S.yo||0,anchor:L.start+mx/S.bw}};
-cv.addEventListener('pointerdown',e=>{PT.set(e.pointerId,pos(e));if(PT.size===2&&L&&S.c.length){S.drag=null;S.pending=null;closePop();pinchStart()}});
+cv.addEventListener('pointerdown',e=>{if(e.button>0)return;PT.set(e.pointerId,pos(e));if(PT.size===2&&L&&S.c.length){S.drag=null;S.pending=null;closePop();pinchStart()}});
 cv.addEventListener('pointermove',e=>{if(!PT.has(e.pointerId))return;PT.set(e.pointerId,pos(e));if(!PINCH||PT.size<2)return;e.preventDefault();e.stopImmediatePropagation();
   const [a,b]=[...PT.values()],dx=Math.max(Math.abs(a.x-b.x),20),dy=Math.max(Math.abs(a.y-b.y),20),mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
   if(PINCH.vert){S.ys=Math.max(.05,Math.min(20,PINCH.ys*PINCH.dy/dy))}
   else{S.bw=Math.max(1.5,Math.min(80,PINCH.bw*dx/PINCH.dx))}
   S.end=PINCH.anchor-mx/S.bw+L.pw/S.bw;
-  if(L.mainH)S.yo=PINCH.yo+(my-PINCH.my)/L.mainH*1.18;
+  if(L.mainH)S.yo=PINCH.yo+(my-PINCH.my)/L.mainH*1.18*(S.inv?-1:1);
   draw()},{passive:false});
 const pinchEnd=e=>{PT.delete(e.pointerId);if(PT.size<2)PINCH=null};
 cv.addEventListener('pointerup',pinchEnd);cv.addEventListener('pointercancel',pinchEnd);
 cv.addEventListener('pointerdown',e=>{
-  if(!L||!S.c.length||PT.size>1)return;const m=pos(e);S.mouse=m;cv.setPointerCapture(e.pointerId);
+  if(e.button>0||!L||!S.c.length||PT.size>1)return;   // right and middle clicks are handled by the context menu
+  const m=pos(e);S.mouse=m;cv.setPointerCapture(e.pointerId);
   if(m.x>=L.pw){S.drag={axis:true,y:m.y,ys:S.ys};return}
   if(m.y>=L.H-TAX){S.drag={taxis:true,x:m.x,bw:S.bw,end:S.end};return}
   if(S.rp.pick){const i=Math.round(L.start+m.x/S.bw-.5);startReplay(Math.max(20,Math.min(S.base.length-2,i)));return}
@@ -1306,12 +1335,13 @@ cv.addEventListener('pointerdown',e=>{
     else{if(S.pending.type==='channel')S.pending.c=pt;else S.pending.b=pt;commit(S.pending)}
     draw();return}
   const h=inMain&&hit(m.x,m.y);
+  if(h&&h.d.locked){S.sel=h.d;S.drag={pan:true,x:m.x,y:m.y,end:S.end,yo:S.yo||0,v:inMain};draw();return}   // locked: select, never move
   if(h){S.sel=h.d;pushHist();const d=h.d;S.drag={shape:d,h:h.h,start:ptAt(m.x,m.y),a:{...d.a},b:d.b&&{...d.b},c:d.c&&{...d.c}};draw();return}
   S.sel=null;S.drag={pan:true,x:m.x,y:m.y,end:S.end,yo:S.yo||0,v:inMain};draw();
 });
 cv.addEventListener('pointermove',e=>{if(PINCH)return;
   const m=pos(e);S.mouse=m;const D=S.drag;
-  if(D?.pan){S.end=D.end-(m.x-D.x)/S.bw;if(D.v)S.yo=D.yo+(m.y-D.y)/L.mainH*1.18}
+  if(D?.pan){S.end=D.end-(m.x-D.x)/S.bw;if(D.v)S.yo=D.yo+(m.y-D.y)/L.mainH*1.18*(S.inv?-1:1)}
   else if(D?.axis)S.ys=Math.max(.05,Math.min(20,D.ys*Math.exp((m.y-D.y)/150)));
   else if(D?.taxis){const nb=Math.max(1.5,Math.min(80,D.bw*Math.exp((m.x-D.x)/200)));S.bw=nb;S.end=D.end}
   else if(D?.shape){const p=ptAt(m.x,m.y),s=D.shape;
@@ -1327,10 +1357,10 @@ const up=()=>{const D=S.drag;S.drag=null;
   draw()};
 cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
 cv.addEventListener('pointerleave',()=>{if(!S.drag){S.mouse=null;draw()}});
-cv.addEventListener('wheel',e=>{e.preventDefault();closePop();if(!L)return;const m=pos(e);
+cv.addEventListener('wheel',e=>{e.preventDefault();closePop();closeMenu();if(!L)return;const m=pos(e);
   if(e.shiftKey||Math.abs(e.deltaX)>Math.abs(e.deltaY)){S.end+=(e.deltaX||e.deltaY)/S.bw;return draw()}
   const anchor=L.start+m.x/S.bw,nb=Math.max(1.5,Math.min(80,S.bw*Math.exp(-e.deltaY*.0015)));S.bw=nb;S.end=anchor-m.x/nb+L.pw/nb;draw()},{passive:false});
-cv.addEventListener('dblclick',e=>{const m=pos(e);if(!L)return;if(m.x>=L.pw){S.ys=1;S.yo=0;return draw()}if(m.y<L.mainH){const h=hit(m.x,m.y);if(h){if(h.d.type==='text'){}return}}S.end=S.c.length+8;S.bw=8;S.ys=1;S.yo=0;draw()});
+cv.addEventListener('dblclick',e=>{const m=pos(e);if(!L)return;if(m.x>=L.pw){S.ys=1;S.yo=0;return draw()}if(m.y<L.mainH){const h=hit(m.x,m.y);if(h){if(h.d.type==='text')editText(h.d);return}}resetView()});
 function markerAt(x,y){const out=[];for(const h of MKH){const onLab=h.ly!=null&&Math.abs(h.x-x)<h.lw/2+4&&Math.abs(h.ly-y)<10,d=Math.hypot(h.x-x,h.y-y);if(onLab||d<16)out.push({h,s:onLab?0:d})}
   out.sort((a,b)=>a.s-b.s);const seen=new Set(),r=[];for(const o of out){const k=o.h.mk.i+'|'+o.h.mk.k+'|'+o.h.mk.id+'|'+o.h.mk.dir;if(!seen.has(k)){seen.add(k);r.push(o.h)}}return r.length?r.slice(0,4):null}
 function closePop(){document.querySelectorAll('.mkpop').forEach(e=>e.remove())}
@@ -1363,13 +1393,185 @@ function textNote(pt,m){
   const fin=ok=>{if(done)return;done=true;const v=inp.value.trim();inp.remove();if(ok&&v)commit({type:'text',a:pt,text:v});else{S.tool='cursor';renderRail()}};
   inp.addEventListener('keydown',e=>{if(e.key==='Enter')fin(true);if(e.key==='Escape')fin(false)});inp.addEventListener('blur',()=>fin(true));
 }
+/* ---------- right-click menus (TradingView-style) ---------- */
+const IS_MAC=/Mac|iPhone|iPad|iPod/.test(navigator.platform||navigator.userAgent||''),MOD=IS_MAC?'⌘':'Ctrl+',ALT=IS_MAC?'⌥':'Alt+';
+const MI={reset:'<path d="M3 8a5 5 0 1 0 1.5-3.6"/><path d="M3 2.5V5h2.5"/>',copy:'<rect x="5" y="5" width="8.5" height="8.5" rx="1.5"/><path d="M3 10.5V3.5a1 1 0 0 1 1-1h6.5"/>',
+  paste:'<rect x="3.5" y="3" width="9" height="11" rx="1.5"/><path d="M6 3V2h4v1"/>',bell:'<path d="M4 11V7a4 4 0 0 1 8 0v4l1 1.5H3z"/><path d="M6.5 14a1.5 1.5 0 0 0 3 0"/>',
+  hline:'<path d="M1.5 8h13"/><circle cx="8" cy="8" r="1.6"/>',ind:'<path d="M2 12l3.5-4 2.5 2.5L13.5 4"/><path d="M2 2.5v11h12"/>',
+  trash:'<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 9h5.6l.7-9"/>',eye:'<path d="M1 8s2.5-4.5 7-4.5S15 8 15 8s-2.5 4.5-7 4.5S1 8 1 8z"/><circle cx="8" cy="8" r="1.8"/>',
+  gear:'<circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>',
+  lock:'<rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>',unlock:'<rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 4.8-1"/>',
+  clone:'<rect x="2.5" y="2.5" width="7" height="7" rx="1.2"/><rect x="6.5" y="6.5" width="7" height="7" rx="1.2"/>',order:'<path d="M3 4.5h10M3 8h10M3 11.5h6"/>',
+  text:'<path d="M3.5 3.5h9M8 3.5V13"/>',code:'<path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5"/>',latest:'<path d="M2.5 8h9M8.5 4.5L12 8l-3.5 3.5M14 3v10"/>',
+  check:'<path d="M3 8.5l3 3 7-7"/>'};
+const svgI=k=>k&&MI[k]?`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${MI[k]}</svg>`:'';
+const CM=[];   // open menu levels (0 = the menu, 1 = a submenu)
+function closeMenu(lv=0){while(CM.length>lv)CM.pop().el.remove()}
+function openMenu(items,x,y,lv=0,anchor){
+  closeMenu(lv);const it=[];
+  for(const i of items){if(!i)continue;if(i==='-'&&(!it.length||it[it.length-1]==='-'))continue;it.push(i)}while(it[it.length-1]==='-')it.pop();
+  if(!it.length)return null;
+  const el=document.createElement('div');el.className='cm';el.setAttribute('role','menu');el.tabIndex=-1;
+  el.innerHTML=it.map((i,k)=>i==='-'?'<hr>':i.swatches?`<div class="cmsw" role="group" aria-label="Colour">${i.swatches.map(c=>`<button type="button" data-sw="${c}" style="background:${c}" class="${(i.on||'').toLowerCase()===c?'on':''}" aria-label="Colour ${c}"></button>`).join('')}</div>`
+    :`<button type="button" class="cmi" role="${i.check!=null?'menuitemcheckbox':'menuitem'}"${i.check!=null?` aria-checked="${!!i.check}"`:''}${i.sub?' aria-haspopup="menu"':''} data-k="${k}"${i.disabled?' disabled':''}><span class="cmic">${i.check?svgI('check'):svgI(i.icon)}</span><span class="cml">${esc(i.label)}</span>${i.sub?'<span class="cmk">›</span>':i.key?`<kbd class="cmk">${esc(i.key)}</kbd>`:''}</button>`).join('');
+  document.body.append(el);
+  const W=innerWidth,H=innerHeight,w=el.offsetWidth,h=el.offsetHeight;let left=x,top=y;
+  if(anchor){left=anchor.right-2;if(left+w>W-6)left=anchor.left-w+2;top=anchor.top-5}
+  el.style.left=Math.max(6,Math.min(W-w-6,left))+'px';el.style.top=Math.max(6,Math.min(H-h-6,top))+'px';
+  const level={el,from:null};CM[lv]=level;
+  const btns=()=>[...el.querySelectorAll('.cmi:not(:disabled)')],mark=b=>btns().forEach(x=>x.classList.toggle('act',x===b));
+  const sub=(b,i,focus)=>{if(!CM[lv+1]||CM[lv+1].from!==b){const s=openMenu(i.sub,0,0,lv+1,b.getBoundingClientRect());if(s)CM[lv+1].from=b}
+    if(focus&&CM[lv+1]){const f=CM[lv+1].el.querySelector('.cmi:not(:disabled)');if(f){f.classList.add('act');f.focus({preventScroll:true})}}};
+  const run=b=>{const i=it[+b.dataset.k];if(!i||i.disabled)return;if(i.sub)return sub(b,i,true);closeMenu();if(i.act)i.act()};
+  el.addEventListener('click',e=>{const s=e.target.closest('[data-sw]');if(s){const i=it.find(x=>x&&x.swatches);closeMenu();i.pick(s.dataset.sw);return}const b=e.target.closest('.cmi');if(b)run(b)});
+  el.addEventListener('pointerover',e=>{const b=e.target.closest('.cmi');if(!b||b.disabled)return;mark(b);const i=it[+b.dataset.k];if(i.sub)sub(b,i,false);else closeMenu(lv+1)});
+  el.addEventListener('keydown',e=>{e.stopPropagation();const bs=btns();let a=bs.indexOf(el.querySelector('.cmi.act'));
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!bs.length)return;a=e.key==='ArrowDown'?(a+1)%bs.length:(a<=0?bs.length-1:a-1);mark(bs[a]);bs[a].focus({preventScroll:true});closeMenu(lv+1)}
+    else if(e.key==='Enter'||e.key===' '||e.key==='ArrowRight'){const b=bs[a];if(!b)return;e.preventDefault();if(e.key==='ArrowRight'&&!it[+b.dataset.k].sub)return;run(b)}
+    else if(e.key==='ArrowLeft'&&lv){e.preventDefault();closeMenu(lv);CM[lv-1]?.el.querySelector('.cmi.act')?.focus({preventScroll:true})}
+    else if(e.key==='Escape'||e.key==='Tab'){e.preventDefault();closeMenu()}});
+  el.addEventListener('contextmenu',e=>e.preventDefault());
+  if(!lv)el.focus({preventScroll:true});
+  return el}
+document.addEventListener('pointerdown',e=>{if(CM.length&&!CM.some(l=>l.el.contains(e.target)))closeMenu()},true);
+addEventListener('resize',()=>closeMenu());addEventListener('blur',()=>closeMenu());
+
+/* what each menu does */
+const DNAME={trend:'Trend line',ray:'Ray',arrow:'Arrow',hline:'Horizontal line',vline:'Vertical line',channel:'Parallel channel',rect:'Rectangle',fib:'Fib retracement',long:'Long position',short:'Short position',measure:'Measure',text:'Text note'};
+const COLORABLE=new Set(['trend','ray','arrow','hline','vline','channel','rect','text']),SWATCH=['#2962ff','#f23645','#089981','#ff9800','#9c27b0','#00bcd4','#f59f00','#787b86'];
+const plainP=p=>p.toFixed(Math.min(8,dec(p)));
+function mainPt(){const m=S.mouse;if(!L||!m||m.x<0||m.y<0||m.x>=L.pw||m.y>=L.mainH)return null;return{t:timeOf(Math.round(L.start+m.x/S.bw-.5)),p:L.M.p(m.y)}}
+function resetView(){S.end=S.c.length+8;S.bw=8;S.ys=1;S.yo=0;draw()}
+function toggleLog(){S.log=!S.log;store.set('log',S.log);markLog();draw()}
+function toggleInv(){S.inv=!S.inv;store.set('inv',S.inv);toast(S.inv?'Price scale inverted':'Price scale back to normal');draw()}
+function toggleHideDraw(){S.hideDraw=!S.hideDraw;store.set('hideDraw',S.hideDraw);if(S.hideDraw){S.sel=null;const n=(S.draw[S.sym]||[]).length;if(n)toast('Drawings hidden. The eye button on the left toolbar shows them again.')}renderRail();draw()}
+function copyText(s,msg){const fb=()=>{const ta=document.createElement('textarea');ta.value=s;ta.setAttribute('readonly','');ta.style.cssText='position:fixed;top:0;left:0;opacity:0';document.body.append(ta);ta.select();let ok=false;try{ok=document.execCommand('copy')}catch(e){}ta.remove();toast(ok?msg:`Couldn’t copy. The price is ${s}`)};
+  try{if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(s).then(()=>toast(msg),fb);else fb()}catch(e){fb()}}
+function addAlert(p){const last=S.base[S.base.length-1]?.c;if(p==null||!isFinite(p)||!last)return;const a={sym:S.sym,price:+plainP(p),dir:p>=last?'up':'dn'};
+  S.alerts.push(a);store.set('alerts',S.alerts);renderAlerts();draw();toast(`Alert set: ${S.sym} ${a.dir==='up'?'rises to':'falls to'} ${fp(a.price)}`)}
+function removeAlert(a){S.alerts=S.alerts.filter(x=>x!==a);store.set('alerts',S.alerts);renderAlerts();draw();toast(`Alert at ${fp(a.price)} removed`)}
+function addHLine(p,t){if(p==null||!isFinite(p)||!S.c.length)return;commit({type:'hline',a:{t:t??S.c[S.c.length-1].t,p:+plainP(p)}})}
+const shiftD=(d,dt,dp)=>{for(const k of['a','b','c'])if(d[k])d[k]={t:d[k].t+dt,p:d[k].p+dp}};
+const nudgeP=d=>L?(L.M.hi-L.M.lo)*.04:Math.abs(d.a.p)*.01;
+function cloneDrawing(d){const c=JSON.parse(JSON.stringify(d));delete c.locked;if(c.type==='hline')shiftD(c,0,nudgeP(c));else shiftD(c,5*ms(),0);commit(c);toast(`${DNAME[d.type]||'Drawing'} cloned`)}
+function copyDrawing(d){S.clip=JSON.parse(JSON.stringify(d));delete S.clip.locked;toast(`${DNAME[d.type]||'Drawing'} copied. Paste it with ${MOD}V or right-click the chart.`)}
+function pasteDrawing(at){if(!S.clip||!S.c.length)return;const d=JSON.parse(JSON.stringify(S.clip));
+  if(at)shiftD(d,at.t-d.a.t,at.p-d.a.p);else if(d.type==='hline')shiftD(d,0,nudgeP(d));else shiftD(d,5*ms(),0);
+  commit(d);toast(`${DNAME[d.type]||'Drawing'} pasted`)}
+function removeDrawing(d){pushHist();S.draw[S.sym]=(S.draw[S.sym]||[]).filter(x=>x!==d);if(S.sel===d)S.sel=null;saveDraw();draw()}
+function removeDrawings(){if(!(S.draw[S.sym]||[]).length)return;pushHist();S.draw[S.sym]=[];S.sel=null;saveDraw();toast(`Drawings removed. ${MOD}Z to undo.`);draw()}
+function reorder(d,dir){const l=S.draw[S.sym]||[];if(!l.includes(d))return;pushHist();const r=l.filter(x=>x!==d);if(dir>0)r.push(d);else r.unshift(d);S.draw[S.sym]=r;saveDraw();draw()}
+const studyName=st=>st.id==='script'?(S.R[st.uid]?.title||S.scripts.find(s=>s.id===st.sid)?.name||'Script'):(DEFS[st.id]?.n||'Indicator');
+function removeStudy(st){pushStudyHist();S.studies=S.studies.filter(s=>s!==st);delete S.R[st.uid];saveStudies();buildLegend();renderTester();draw();toast(`${studyName(st)} removed. ${MOD}Z to undo.`)}
+function removeIndicators(){if(!S.studies.length)return;pushStudyHist();S.studies=[];S.R={};saveStudies();buildLegend();renderTester();draw();toast(`Indicators removed. ${MOD}Z to undo.`)}
+function editText(d){const p=scr(d.a),inp=document.createElement('input');inp.value=d.text||'';inp.setAttribute('aria-label','Edit note');
+  Object.assign(inp.style,{position:'absolute',left:Math.max(4,p.x)+'px',top:Math.max(4,p.y-24)+'px',zIndex:5,height:'32px',padding:'0 8px',border:'1px solid var(--acc)',borderRadius:'6px',background:'var(--bg)',fontSize:'16px',width:'220px'});
+  wrap.append(inp);inp.focus();inp.select();let done=false;
+  const fin=ok=>{if(done)return;done=true;const v=inp.value.trim();inp.remove();if(ok&&v&&v!==d.text){pushHist();d.text=v;saveDraw();draw()}};
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter')fin(true);if(e.key==='Escape')fin(false)});inp.addEventListener('blur',()=>fin(true))}
+
+function mainMenu(m){
+  const p=L.M.p(m.y),t=timeOf(Math.round(L.start+m.x/S.bw-.5)),px=fp(p),nd=(S.draw[S.sym]||[]).length,ni=S.studies.length;
+  const al=S.alerts.find(a=>a.sym===S.sym&&Math.abs(L.M.y(a.price)-m.y)<6);
+  return[{label:'Reset chart view',icon:'reset',key:ALT+'R',act:resetView},'-',
+    {label:`Copy price ${px}`,icon:'copy',act:()=>copyText(plainP(p),`Copied ${px}`)},
+    S.clip&&{label:'Paste',icon:'paste',key:MOD+'V',act:()=>pasteDrawing({t,p})},'-',
+    al?{label:`Remove alert at ${fp(al.price)}`,icon:'bell',act:()=>removeAlert(al)}:{label:`Add alert on ${S.sym} at ${px}`,icon:'bell',key:ALT+'A',act:()=>addAlert(p)},
+    {label:`Draw horizontal line at ${px}`,icon:'hline',key:ALT+'H',act:()=>addHLine(p,t)},'-',
+    {label:'Add indicator…',icon:'ind',key:'/',act:openInd},
+    {label:'Remove indicators',icon:'trash',disabled:!ni,act:removeIndicators},
+    {label:'Remove drawings',icon:'trash',disabled:!nd,act:removeDrawings},
+    {label:S.hideDraw?'Show all drawings':'Hide all drawings',icon:'eye',disabled:!nd&&!S.hideDraw,act:toggleHideDraw},'-',
+    {label:'Settings…',icon:'gear',act:openChartSettings}]}
+function drawMenu(d){const l=S.draw[S.sym]||[],j=l.indexOf(d);
+  return[COLORABLE.has(d.type)&&{swatches:SWATCH,on:d.color||'#2962ff',pick:c=>{pushHist();d.color=c;saveDraw();draw()}},
+    d.type==='text'&&{label:'Edit text…',icon:'text',act:()=>editText(d)},
+    d.type==='hline'&&{label:`Add alert at ${fp(d.a.p)}`,icon:'bell',act:()=>addAlert(d.a.p)},'-',
+    {label:'Clone',icon:'clone',act:()=>cloneDrawing(d)},
+    {label:'Copy',icon:'copy',key:MOD+'C',act:()=>copyDrawing(d)},'-',
+    {label:d.locked?'Unlock':'Lock',icon:d.locked?'unlock':'lock',act:()=>{d.locked=!d.locked;saveDraw();toast(`${DNAME[d.type]||'Drawing'} ${d.locked?'locked':'unlocked'}`);draw()}},
+    {label:'Visual order',icon:'order',sub:[{label:'Bring to front',disabled:j===l.length-1,act:()=>reorder(d,1)},{label:'Send to back',disabled:j<=0,act:()=>reorder(d,-1)}]},'-',
+    {label:'Remove',icon:'trash',key:'Del',act:()=>removeDrawing(d)}]}
+function studyMenu(st,inPane){
+  return[{label:'Settings…',icon:'gear',act:()=>openSettings(st)},
+    st.id==='script'&&{label:'Edit script',icon:'code',act:()=>{openPanel('editor');selectScript(st.sid)}},
+    {label:st.hide?'Show':'Hide',icon:'eye',act:()=>{st.hide=!st.hide;saveStudies();buildLegend();draw()}},
+    {label:'Remove',icon:'trash',act:()=>removeStudy(st)},'-',
+    {label:'Add indicator…',icon:'ind',key:'/',act:openInd},
+    inPane&&{label:'Reset chart view',icon:'reset',key:ALT+'R',act:resetView}]}
+function scaleMenu(){
+  return[{label:'Reset price scale',icon:'reset',act:()=>{S.ys=1;S.yo=0;draw()}},'-',
+    {label:'Regular',check:!S.log,act:()=>{if(S.log)toggleLog()}},
+    {label:'Logarithmic',check:S.log,key:ALT+'L',act:()=>{if(!S.log)toggleLog()}},'-',
+    {label:'Invert scale',check:S.inv,key:ALT+'I',act:toggleInv},'-',
+    {label:'Settings…',icon:'gear',act:openChartSettings}]}
+function timeMenu(){
+  return[{label:'Reset time scale',icon:'reset',act:()=>{S.end=S.c.length+8;S.bw=8;draw()}},
+    {label:'Scroll to the most recent bar',icon:'latest',act:()=>{S.end=S.c.length+8;draw()}}]}
+/* m: point on the chart canvas; cx, cy: where to open the menu on screen */
+function chartMenu(m,cx,cy){
+  if(!L||!S.c.length)return;closePop();S.drag=null;
+  if(S.rp.pick){S.rp.pick=false;draw();return}                              // right-click cancels "pick a replay start"
+  if(S.pending||S.tool!=='cursor'){S.pending=null;S.tool='cursor';renderRail();draw();return}   // ...and a drawing in progress
+  let items;
+  if(m.x>=L.pw)items=scaleMenu();
+  else if(m.y>=L.H-TAX)items=timeMenu();
+  else{const pane=L.panes.find(p=>m.y>=p.top&&m.y<p.top+p.h),st=pane&&!pane.main&&S.studies.find(s=>s.uid===pane.uid);
+    if(st)items=studyMenu(st,true);
+    else{const h=m.y<L.mainH&&hit(m.x,m.y);if(h){S.sel=h.d;draw();items=drawMenu(h.d)}else items=mainMenu(m)}}
+  openMenu(items,cx,cy)}
+let lastPT='mouse',LP=null;
+wrap.addEventListener('contextmenu',e=>{
+  if(e.target.matches('input,textarea'))return;            // keep the browser's own menu (paste) while typing a note
+  e.preventDefault();if(lastPT==='touch')return;            // on touch, a long press opens the menu instead
+  const row=e.target.closest('.lrow[data-uid]');
+  if(row){const st=S.studies.find(s=>s.uid===row.dataset.uid);if(st)openMenu(studyMenu(st,false),e.clientX,e.clientY);return}
+  if(e.target.closest('.mkpop,.rp'))return;
+  const r=cv.getBoundingClientRect();chartMenu({x:e.clientX-r.left,y:e.clientY-r.top},e.clientX,e.clientY)});
+/* touch: press and hold the chart for the same menu */
+wrap.addEventListener('pointerdown',e=>{lastPT=e.pointerType||'mouse'},true);
+cv.addEventListener('pointerdown',e=>{if(LP){clearTimeout(LP.tm);LP=null}
+  if(e.pointerType!=='touch'||PT.size>(PT.has(e.pointerId)?1:0)||S.tool!=='cursor'||S.rp.pick||S.pending)return;
+  const m=pos(e),cx=e.clientX,cy=e.clientY;
+  LP={m,tm:setTimeout(()=>{LP=null;if(PINCH||PT.size>1||document.querySelector('.mkpop'))return;chartMenu(m,cx,cy)},550)}},{capture:true});
+cv.addEventListener('pointermove',e=>{if(!LP||e.pointerType!=='touch')return;const m=pos(e);if(Math.hypot(m.x-LP.m.x,m.y-LP.m.y)>8){clearTimeout(LP.tm);LP=null}});
+const lpEnd=()=>{if(LP){clearTimeout(LP.tm);LP=null}};cv.addEventListener('pointerup',lpEnd);cv.addEventListener('pointercancel',lpEnd);
+
+/* ---------- chart settings ---------- */
+const CS_DEF={theme:'auto',up:'',dn:'',grid:'both',priceLine:true,countdown:true,ohlc:true};
+function applyTheme(){const t=S.cs.theme;if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;else delete document.documentElement.dataset.theme}
+function openChartSettings(v){
+  const c=v||Object.assign({},S.cs,{log:S.log,inv:S.inv}),C=pal();
+  const sel=(id,opts,cur)=>`<select id="${id}">${opts.map(([k,l])=>`<option value="${k}"${k===cur?' selected':''}>${l}</option>`).join('')}</select>`;
+  const ck=(id,on,lab)=>`<label for="${id}">${lab}</label><div class="pc"><input type="checkbox" id="${id}"${on?' checked':''}></div>`;
+  $('#csF').innerHTML=`<h4>Symbol</h4><label>Candle colours (up, down)</label><div class="pc"><input type="color" id="csUp" value="${hex(c.up||C.up)}" aria-label="Up candle colour"><input type="color" id="csDn" value="${hex(c.dn||C.dn)}" aria-label="Down candle colour"></div>`+
+    ck('csPl',c.priceLine,'Last price line')+ck('csCd',c.countdown,'Countdown to bar close')+
+    '<h4>Status line</h4>'+ck('csOhlc',c.ohlc,'OHLC values')+
+    '<h4>Scales</h4>'+ck('csLog',c.log,'Logarithmic')+ck('csInv',c.inv,'Invert scale')+
+    `<h4>Canvas</h4><label for="csTheme">Theme</label>${sel('csTheme',[['auto','Match device'],['light','Light'],['dark','Dark']],c.theme)}<label for="csGrid">Grid lines</label>${sel('csGrid',[['both','Vert and horz'],['v','Vertical only'],['h','Horizontal only'],['none','None']],c.grid)}`;
+  $('#csM').classList.add('open')}
+$('#csOk').addEventListener('click',()=>{const C=pal(),col=(id,d)=>{const x=$(id).value.toLowerCase();return x===hex(d).toLowerCase()?'':x};
+  S.cs={theme:$('#csTheme').value,up:col('#csUp',C.up),dn:col('#csDn',C.dn),grid:$('#csGrid').value,priceLine:$('#csPl').checked,countdown:$('#csCd').checked,ohlc:$('#csOhlc').checked};store.set('chartSet',S.cs);
+  if($('#csLog').checked!==S.log)toggleLog();if($('#csInv').checked!==S.inv){S.inv=!S.inv;store.set('inv',S.inv)}
+  applyTheme();$('#csM').classList.remove('open');legendValues();draw()});
+$('#csDef').addEventListener('click',()=>openChartSettings(Object.assign({},CS_DEF,{log:false,inv:false})));
+applyTheme();
 document.addEventListener('keydown',e=>{
   if(e.target.matches('input,textarea,select'))return;
   const k=e.key.toLowerCase();
-  if(e.key==='Escape'){closePop();S.pending=null;S.tool='cursor';S.sel=null;S.rp.pick=false;renderRail();$$('.modal').forEach(m=>m.classList.remove('open'))}
+  if(e.key==='Escape'){closeMenu();closePop();S.pending=null;S.tool='cursor';S.sel=null;S.rp.pick=false;renderRail();$$('.modal').forEach(m=>m.classList.remove('open'))}
   else if((e.key==='Delete'||e.key==='Backspace')&&S.sel){pushHist();S.draw[S.sym]=(S.draw[S.sym]||[]).filter(d=>d!==S.sel);S.sel=null;saveDraw()}
   else if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();undo()}
-  else if(e.altKey&&k==='t'){S.tool='trend';renderRail()}else if(e.altKey&&k==='h'){S.tool='hline';renderRail()}else if(e.altKey&&k==='v'){S.tool='vline';renderRail()}else if(e.altKey&&k==='f'){S.tool='fib';renderRail()}
+  else if((e.ctrlKey||e.metaKey)&&k==='c'&&S.sel)copyDrawing(S.sel);
+  else if((e.ctrlKey||e.metaKey)&&k==='v'&&S.clip){e.preventDefault();pasteDrawing()}
+  // Alt shortcuts read the physical key (e.code) so they also work on a Mac, where Alt+letter types a symbol
+  else if(e.altKey&&e.code==='KeyT'){S.tool='trend';renderRail()}
+  else if(e.altKey&&e.code==='KeyH'){e.preventDefault();const mp=mainPt();if(mp)addHLine(mp.p,mp.t);else{S.tool='hline';renderRail()}}
+  else if(e.altKey&&e.code==='KeyV'){S.tool='vline';renderRail()}else if(e.altKey&&e.code==='KeyF'){S.tool='fib';renderRail()}
+  else if(e.altKey&&e.code==='KeyR'){e.preventDefault();resetView()}
+  else if(e.altKey&&e.code==='KeyA'){e.preventDefault();const mp=mainPt();addAlert(mp?mp.p:S.base[S.base.length-1]?.c)}
+  else if(e.altKey&&e.code==='KeyL'){e.preventDefault();toggleLog()}
+  else if(e.altKey&&e.code==='KeyI'){e.preventDefault();toggleInv()}
   else if(e.key==='/'){e.preventDefault();openInd()}
   else if(e.key==='ArrowLeft')S.end-=Math.max(1,40/S.bw);else if(e.key==='ArrowRight')S.end+=Math.max(1,40/S.bw);
   else if(S.rp.on&&e.shiftKey&&e.key==='ArrowRight')stepReplay();
@@ -1382,7 +1584,7 @@ $('#tfs').addEventListener('click',e=>{const t=e.target.dataset.tf;if(!t||t===S.
 $('#hist').value=S.depth;$('#hist').addEventListener('change',e=>{S.depth=e.target.value;store.set('depth',S.depth);load()});
 $('#type').value=S.type;$('#type').addEventListener('change',e=>{S.type=e.target.value;store.set('type',S.type);draw()});
 const markLog=()=>$('#logBtn').classList.toggle('on',S.log);
-$('#logBtn').addEventListener('click',()=>{S.log=!S.log;store.set('log',S.log);markLog();draw()});
+$('#logBtn').addEventListener('click',()=>toggleLog());
 const symI=$('#sym');symI.value=S.sym;
 const go=v=>{v=clean(v);if(!v||v===S.sym){symI.value=S.sym;return}const prev=S.sym;S.sym=v;store.set('sym',v);symI.value=v;S.hist=[];load(prev);symI.blur()};
 symI.addEventListener('change',()=>go(symI.value));symI.addEventListener('keydown',e=>{if(e.key==='Enter')go(symI.value)});symI.addEventListener('focus',()=>symI.select());
