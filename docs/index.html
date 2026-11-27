@@ -194,6 +194,32 @@ table.t{width:100%;border-collapse:collapse;font-size:13px}
 .cmsw button{width:22px;height:22px;border-radius:50%;box-shadow:0 0 0 1px var(--line)}
 .cmsw button.on,.cmsw button:hover{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ink)}
 @media (pointer:coarse){.cmi{height:42px}}
+.cmi.cur,.cmi.cur .cmic{color:var(--acc)}
+.cmsw.pal{display:grid;grid-template-columns:repeat(10,18px);gap:6px;padding:10px 12px 8px}
+.cmsw.pal button{width:18px;height:18px;border-radius:3px}
+.cmrg{display:flex;align-items:center;gap:10px;padding:6px 14px 8px 12px;font-size:13px;color:var(--mute)}
+.cmrg input{flex:1;min-width:0;accent-color:var(--acc)}.cmrg output{min-width:40px;text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
+/* left toolbar groups: the small corner arrow opens the rest of the group */
+.rail .rg{position:relative;flex:none}
+.rail .rg .car{position:absolute;right:-4px;bottom:0;width:12px;height:12px;display:grid;place-items:center;color:var(--mute);opacity:.55;background:none}
+.rail .rg:hover .car,.rail .rg .car:focus-visible{opacity:1}.rail .rg .car:hover{background:none;color:var(--ink)}
+@media (pointer:coarse){.rail .rg .car{width:16px;height:16px;right:-6px}}
+/* floating toolbar on a selected drawing */
+.dtb{position:absolute;z-index:5;display:flex;align-items:center;gap:1px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.22);padding:2px;user-select:none;touch-action:none;white-space:nowrap}
+.dtb[hidden]{display:none}
+.dtb button{position:relative;height:32px;min-width:32px;padding:0 6px;display:grid;place-items:center;border-radius:4px;color:var(--ink)}
+.dtb button:hover{background:var(--hov)}
+.dtb button[aria-pressed=true]{color:var(--acc)}
+.dtbg{width:16px;height:32px;display:grid;place-items:center;cursor:grab;color:var(--mute)}.dtb.drag .dtbg{cursor:grabbing}
+.dtbc svg{margin-bottom:3px}.dtbc i{position:absolute;left:8px;right:8px;bottom:5px;height:3px;border-radius:2px;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 15%,transparent)}
+.dtbn{font-size:12px;font-variant-numeric:tabular-nums}
+.dtbs{width:1px;height:20px;background:var(--line);margin:0 3px}
+@media (pointer:coarse){.dtb button{height:40px;min-width:40px}.dtbg{height:40px;width:22px}}
+/* drawing settings */
+.dsp{display:contents}.dsp.off{display:none}
+#dsF{grid-template-columns:1fr minmax(0,210px);padding-top:12px}
+#dsF textarea{grid-column:1/-1;min-height:84px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);padding:8px;font:inherit;font-size:16px;resize:vertical}
+#dsF input[type=datetime-local]{height:34px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);padding:0 6px;font-size:15px;width:100%;min-width:0}
 #wlBtn{display:none}
 @media (max-width:980px){.edw{grid-template-columns:minmax(0,1fr)}.ref{display:none}.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media (max-width:860px){
@@ -233,6 +259,7 @@ table.t{width:100%;border-collapse:collapse;font-size:13px}
     <main class="chart" id="wrap">
       <canvas id="cv" aria-label="Price chart"></canvas>
       <div id="lg"></div>
+      <div class="dtb" id="dtb" role="toolbar" aria-label="Drawing toolbar" hidden></div>
       <div class="rp" id="rp">
         <button id="rpPick" title="Choose a new start bar"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1v14M1 8h14"/></svg></button>
         <button id="rpPlay" title="Play / pause"></button>
@@ -332,6 +359,13 @@ table.t{width:100%;border-collapse:collapse;font-size:13px}
   <div class="form" id="csF"></div>
   <div class="dlgf"><button class="btn ghost" id="csDef">Defaults</button><span style="flex:1"></span><button class="btn ghost" data-close>Cancel</button><button class="btn" id="csOk">OK</button></div>
 </div></div>
+<div class="modal" id="dsM"><div class="dlg" role="dialog" aria-labelledby="dsT" style="max-width:480px">
+  <div class="dlgh"><h3 id="dsT">Drawing settings</h3><button data-close aria-label="Close">×</button></div>
+  <div class="dtabs" id="dsTabs" role="tablist"></div>
+  <div class="form" id="dsF"></div>
+  <div class="dlgf"><span style="flex:1"></span><button class="btn ghost" data-close>Cancel</button><button class="btn" id="dsOk">OK</button></div>
+</div></div>
+<input type="color" id="dtbCol" tabindex="-1" aria-hidden="true" style="position:fixed;left:0;top:0;width:24px;height:24px;opacity:0;pointer-events:none;border:0;padding:0">
 <div class="toast" id="toast"></div>
 
 <script>
@@ -830,7 +864,8 @@ const optimize=s=>s; // placeholder for future
 /* ---------- state ---------- */
 const S={sym:store.get('sym','BTCUSDT'),tf:store.get('tf','1h'),type:store.get('type','candles'),log:store.get('log',false),
   wl:store.get('wl',['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT','LINKUSDT','LTCUSDT']),
-  draw:store.get('draw',{}),alerts:store.get('alerts',[]),magnet:store.get('magnet',true),inv:store.get('inv',false),hideDraw:store.get('hideDraw',false),
+  draw:store.get('draw',{}),alerts:store.get('alerts',[]),magnet:store.get('magnet',true),inv:store.get('inv',false),hideDraw:store.get('hideDraw',false),stay:store.get('stay',false),lockAll:store.get('lockAll',false),dtbPos:store.get('dtbPos',null),
+  grp:Object.assign({cursors:'cursor',lines:'trend',fibs:'fib',proj:'long',shapes:'rect',notes:'text'},store.get('toolGroups',{})),
   cs:Object.assign({theme:'auto',up:'',dn:'',grid:'both',priceLine:true,countdown:true,ohlc:true},store.get('chartSet',{})),clip:null,
   studies:store.get('studies',[{uid:'s1',id:'vol',p:{}},{uid:'s2',id:'ema',p:{}},{uid:'s3',id:'rsi',p:{}}]),
   scripts:store.get('scripts',null),panel:store.get('panel',{open:false,tab:'editor',h:320}),
@@ -1075,7 +1110,7 @@ function drawStudy(g,C,st,R,sc,i0,i1,cw,top,h){
 }
 let MKH=[];
 function render(){MKH=[];
-  raf=0;const W=wrap.clientWidth,H=wrap.clientHeight,dpr=devicePixelRatio||1;if(!W||!H)return;
+  raf=0;syncDtb();const W=wrap.clientWidth,H=wrap.clientHeight,dpr=devicePixelRatio||1;if(!W||!H)return;
   if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr)}
   const g=cv.getContext('2d'),C=pal();if(S.cs.up)C.up=S.cs.up;if(S.cs.dn)C.dn=S.cs.dn;g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle=C.bg;g.fillRect(0,0,W,H);
   g.font='12px Inter,system-ui,sans-serif';
@@ -1166,7 +1201,7 @@ function render(){MKH=[];
   for(const st of ovSt){if(st.hide||st.id==='vol')continue;const R=S.R[st.uid];R.plots.forEach((pl,k)=>{if(!visible(st,k)||pl.o)return;const v=pl.d[n-1];if(v==null)return;const y=M.y(v);if(y>8&&y<mainH-8)tag(g,y,fp(v),pcol(st,k,pl))})}
   for(const a of S.alerts.filter(a=>a.sym===S.sym)){const y=M.y(a.price);if(y>0&&y<mainH)tag(g,y,fp(a.price),'#f59f00')}
   for(const p of MY.pos.filter(p=>p.sym===S.sym)){let y=M.y(p.entry);if(y>0&&y<mainH)tag(g,y,(p.side>0?'L ':'S ')+fp(p.entry),p.side>0?'#089981':'#f23645');if(p.liq){y=M.y(p.liq);if(y>0&&y<mainH)tag(g,y,'Liq '+fp(p.liq),'#ff6d00')}}
-  if(!S.hideDraw)for(const d of S.draw[S.sym]||[])if(d.type==='hline'){const y=M.y(d.a.p);if(y>0&&y<mainH)tag(g,y,fp(d.a.p),C.acc)}
+  if(!S.hideDraw)for(const d of S.draw[S.sym]||[])if(d.type==='hline'||d.type==='hray'||d.type==='cross'){const y=M.y(d.a.p);if(y>0&&y<mainH)tag(g,y,fp(d.a.p),d.color||C.acc)}
   if(ly>0&&ly<mainH){tag(g,ly,fp(last.c),lcol);const left=last.t+T-Date.now();if(S.cs.countdown&&!S.rp.on&&left>0&&T<=864e5&&ly+28<mainH){const s=Math.floor(left/1e3),hh=Math.floor(s/3600),mm=Math.floor(s%3600/60),ss=s%60;g.font='11px Inter,system-ui';g.fillStyle=lcol;g.fillRect(pw+1,ly+10,AX-2,16);g.fillStyle='#fff';g.fillText((hh?hh+':'+pad(mm):mm)+':'+pad(ss),pw+6,ly+22)}}
   g.font='12px Inter,system-ui,sans-serif';
 
@@ -1180,7 +1215,7 @@ function render(){MKH=[];
     g.fillStyle=C.ink;g.fillRect(Math.min(Math.max(0,x-tw/2),pw-tw),H-TAX+1,tw,TAX-2);g.fillStyle=C.bg;g.textAlign='center';g.fillText(tl,Math.min(Math.max(tw/2,x),pw-tw/2),H-TAX+18);
   }
   if(S.rp.pick){g.fillStyle=alpha(C.acc,.08);if(m&&m.x<pw)g.fillRect(m.x,0,pw-m.x,H-TAX);g.fillStyle=C.ink;g.textAlign='center';g.font='600 13px Inter,system-ui';g.fillText('Click a bar to start the replay from',pw/2,24)}
-  legendValues();
+  legendValues();syncDtb();
 }
 function drawShapes(g,sh,i0,i1){for(let i=i0;i<=i1;i++){if(!sh.d[i])continue;const b=S.c[i],x=X(i),above=sh.loc==='abovebar',y=above?L.M.y(b.h)-8:L.M.y(b.l)+8,s=Math.max(4,Math.min(7,S.bw*.45));g.fillStyle=sh.c;g.beginPath();
   if(sh.shape==='circle'){g.arc(x,y+(above?-s/2:s/2),s*.6,0,7)}else if(sh.shape==='triangleup'||sh.shape==='arrowup'){const yy=above?y-s:y;g.moveTo(x,yy);g.lineTo(x-s,yy+s*1.3);g.lineTo(x+s,yy+s*1.3)}else{const yy=above?y-s*1.3:y;g.moveTo(x-s,yy);g.lineTo(x+s,yy);g.lineTo(x,yy+s*1.3)}g.fill();
@@ -1218,90 +1253,171 @@ $('#lg').addEventListener('click',e=>{if(e.target.closest('#lgTog')){S.lgMin=!S.
   draw()});
 
 /* ---------- drawings ---------- */
-const FIB=[0,.236,.382,.5,.618,.786,1],FIBC=['#787b86','#f23645','#ff9800','#4caf50','#089981','#00bcd4','#787b86'];
+const FIB=[0,.236,.382,.5,.618,.786,1],FIBX=[0,.382,.618,1,1.618,2.618],FIBC=['#787b86','#f23645','#ff9800','#4caf50','#089981','#00bcd4','#787b86'];
+const FILLED={rect:.12,channel:.1,ellipse:.12,tri:.12};   // shapes with a background, and its default opacity
+const LINEY=new Set(['trend','ray','xline','info','arrow','hline','hray','vline','cross','channel','rect','ellipse','tri']);   // line width and style apply
+const ONEPT=new Set(['hline','hray','vline','cross','text','plabel','markup','markdn']),THREEPT=new Set(['channel','fibext','tri']);
+const lwOf=d=>d.width||1.5,dashOf=(st,w)=>st==='dashed'?[w*3+2,w*2+1]:st==='dotted'?[Math.max(1,w),w*2]:[];
+const extOf=d=>({l:d.type==='xline'||!!d.extL,r:d.type==='xline'||d.type==='ray'||!!d.extR});
+function lineExt(a,b,l,r){const dx=b.x-a.x,dy=b.y-a.y,n=Math.hypot(dx,dy);if(!n)return[a,b];const k=6000/n;return[l?{x:a.x-dx*k,y:a.y-dy*k}:a,r?{x:b.x+dx*k,y:b.y+dy*k}:b]}
+const fibLv=d=>(d.levels&&d.levels.length?d.levels:d.type==='fib'?FIB:FIBX).slice().sort((x,y)=>x-y);
+const fibP=(d,f)=>d.type==='fib'?d.b.p+(d.a.p-d.b.p)*f:d.c.p+(d.b.p-d.a.p)*f;   // retracement: 0 at the 2nd point, 1 at the 1st. Extension: the 1st move, added from the 3rd point
+function fibX(d){const a=scr(d.a),b=scr(d.b);if(d.type==='fib')return[Math.min(a.x,b.x),Math.max(a.x,b.x)+40];const c=scr(d.c);return[c.x,c.x+Math.max(60,Math.abs(b.x-a.x))+40]}
+function fdur(ms){const m=Math.round(ms/6e4),d=Math.floor(m/1440),h=Math.floor(m%1440/60),mi=m%60;return d?`${d}d${h?' '+h+'h':''}`:h?`${h}h${mi?' '+mi+'m':''}`:`${mi}m`}
+function box(g,lines,x,y,bg,fg,ax,ay){g.setLineDash([]);g.font='600 12px Inter,system-ui';const w=Math.max(...lines.map(s=>g.measureText(s).width))+14,h=lines.length*16+6,
+  x0=Math.max(2,Math.min(L.pw-w-2,x-w*ax)),y0=y-h*ay;g.fillStyle=bg;g.fillRect(x0,y0,w,h);g.fillStyle=fg;g.textAlign='left';lines.forEach((s,i)=>g.fillText(s,x0+7,y0+15+i*16));return{x:x0,y:y0,w,h}}
+const arrowHead=(g,x,y,an,s)=>{g.beginPath();g.moveTo(x,y);g.lineTo(x-s*Math.cos(an-.45),y-s*Math.sin(an-.45));g.lineTo(x-s*Math.cos(an+.45),y-s*Math.sin(an+.45));g.closePath();g.fill()};
+const inTri=(px,py,a,b,c)=>{const s=(p,q,r)=>(p.x-r.x)*(q.y-r.y)-(q.x-r.x)*(p.y-r.y),P={x:px,y:py},d1=s(P,a,b),d2=s(P,b,c),d3=s(P,c,a);return!((d1<0||d2<0||d3<0)&&(d1>0||d2>0||d3>0))};
 function chanOff(d){const ia=idxOf(d.a.t),ib=idxOf(d.b.t),ic=idxOf(d.c.t);const lp=ib===ia?d.a.p:d.a.p+(d.b.p-d.a.p)*(ic-ia)/(ib-ia);return d.c.p-lp}
 function drawShape(g,C,d,sel){
-  const col=d.color||C.acc,a=scr(d.a),b=d.b?scr(d.b):a;g.strokeStyle=col;g.fillStyle=col;g.lineWidth=sel?2:1.5;
-  if(d.type==='trend'||d.type==='ray'||d.type==='arrow'){let bx=b.x,by=b.y;if(d.type==='ray'&&(b.x!==a.x||b.y!==a.y)){const k=4000/Math.hypot(b.x-a.x,b.y-a.y);bx=a.x+(b.x-a.x)*k;by=a.y+(b.y-a.y)*k}g.beginPath();g.moveTo(a.x,a.y);g.lineTo(bx,by);g.stroke();
-    if(d.type==='arrow'){const an=Math.atan2(b.y-a.y,b.x-a.x);g.beginPath();g.moveTo(b.x,b.y);g.lineTo(b.x-12*Math.cos(an-.45),b.y-12*Math.sin(an-.45));g.lineTo(b.x-12*Math.cos(an+.45),b.y-12*Math.sin(an+.45));g.fill()}}
-  else if(d.type==='hline'){g.beginPath();g.moveTo(0,Math.round(a.y)+.5);g.lineTo(L.pw,Math.round(a.y)+.5);g.stroke()}
-  else if(d.type==='vline'){g.beginPath();g.moveTo(Math.round(a.x)+.5,0);g.lineTo(Math.round(a.x)+.5,L.mainH);g.stroke()}
-  else if(d.type==='rect'){g.fillStyle=alpha(col,.12);g.fillRect(a.x,a.y,b.x-a.x,b.y-a.y);g.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y)}
-  else if(d.type==='channel'){const off=d.c?chanOff(d):0,a2=scr({t:d.a.t,p:d.a.p+off}),b2=scr({t:d.b.t,p:d.b.p+off});g.fillStyle=alpha(col,.1);g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b.x,b.y);g.lineTo(b2.x,b2.y);g.lineTo(a2.x,a2.y);g.fill();
+  const T=d.type,col=d.color||(T==='markup'?C.up:T==='markdn'?C.dn:C.acc),a=scr(d.a),b=d.b?scr(d.b):a,lw=lwOf(d)+(sel?.5:0),fill=alpha(d.bg||col,d.bgOp??FILLED[T]??.12);
+  const seg=(p,q)=>{g.beginPath();g.moveTo(p.x,p.y);g.lineTo(q.x,q.y);g.stroke()};
+  g.strokeStyle=col;g.fillStyle=col;g.lineWidth=lw;g.setLineDash(LINEY.has(T)?dashOf(d.style,lw):[]);
+  if(T==='trend'||T==='ray'||T==='xline'||T==='info'||T==='arrow'){const e=extOf(d),[p,q]=lineExt(a,b,e.l,e.r);seg(p,q);g.setLineDash([]);
+    if(T==='arrow')arrowHead(g,b.x,b.y,Math.atan2(b.y-a.y,b.x-a.x),10+lw*1.5);
+    if(T==='info'){const df=d.b.p-d.a.p,pct=d.a.p?df/d.a.p*100:0,bars=Math.round(idxOf(d.b.t)-idxOf(d.a.t)),ang=Math.atan2(a.y-b.y,b.x-a.x)*180/Math.PI;
+      box(g,[`${fp(df)} (${pct>=0?'+':''}${pct.toFixed(2)}%)`,`${bars} bars, ${fdur(Math.abs(bars)*ms())}`,`${ang.toFixed(1)}°`],b.x+10,b.y,alpha(col,.92),'#fff',0,b.y<a.y?1:0)}}
+  else if(T==='hline'||T==='hray'){const y=Math.round(a.y)+.5;seg({x:T==='hray'?a.x:0,y},{x:L.pw,y})}
+  else if(T==='vline'){const x=Math.round(a.x)+.5;seg({x,y:0},{x,y:L.mainH})}
+  else if(T==='cross'){const x=Math.round(a.x)+.5,y=Math.round(a.y)+.5;seg({x:0,y},{x:L.pw,y});seg({x,y:0},{x,y:L.mainH})}
+  else if(T==='rect'){g.fillStyle=fill;g.fillRect(a.x,a.y,b.x-a.x,b.y-a.y);g.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y)}
+  else if(T==='ellipse'){g.beginPath();g.ellipse((a.x+b.x)/2,(a.y+b.y)/2,Math.max(.5,Math.abs(b.x-a.x)/2),Math.max(.5,Math.abs(b.y-a.y)/2),0,0,Math.PI*2);g.fillStyle=fill;g.fill();g.stroke()}
+  else if(T==='tri'){const c=scr(d.c);g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b.x,b.y);g.lineTo(c.x,c.y);g.closePath();g.fillStyle=fill;g.fill();g.stroke()}
+  else if(T==='channel'){const off=d.c?chanOff(d):0,a2=scr({t:d.a.t,p:d.a.p+off}),b2=scr({t:d.b.t,p:d.b.p+off});g.fillStyle=fill;g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b.x,b.y);g.lineTo(b2.x,b2.y);g.lineTo(a2.x,a2.y);g.fill();
     g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b.x,b.y);g.moveTo(a2.x,a2.y);g.lineTo(b2.x,b2.y);g.stroke();g.setLineDash([4,4]);g.lineWidth=1;g.beginPath();g.moveTo((a.x+a2.x)/2,(a.y+a2.y)/2);g.lineTo((b.x+b2.x)/2,(b.y+b2.y)/2);g.stroke();g.setLineDash([])}
-  else if(d.type==='fib'){const x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x)+40;g.font='11px Inter,system-ui';g.textAlign='left';
-    FIB.forEach((f,j)=>{const p=d.b.p+(d.a.p-d.b.p)*f,y=Math.round(L.M.y(p))+.5,hue=FIBC[j];
-      if(j<6){const p2=d.b.p+(d.a.p-d.b.p)*FIB[j+1];g.fillStyle=alpha(hue,.09);g.fillRect(x0,y,x1-x0,L.M.y(p2)-y)}
-      g.strokeStyle=hue;g.lineWidth=1;g.beginPath();g.moveTo(x0,y);g.lineTo(x1,y);g.stroke();g.fillStyle=hue;g.fillText(`${f} (${fp(p)})`,x1+4,y+4)});
-    g.setLineDash([3,3]);g.strokeStyle=C.cross;g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b.x,b.y);g.stroke();g.setLineDash([])}
-  else if(d.type==='measure'){const up=d.b.p>=d.a.p,cc=up?C.up:C.dn;g.fillStyle=alpha(cc,.13);g.fillRect(a.x,a.y,b.x-a.x,b.y-a.y);g.strokeStyle=cc;g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b.x,b.y);g.stroke();
+  else if(T==='fib'||T==='fibext'){const lv=fibLv(d),[x0,x1]=fibX(d);g.font='11px Inter,system-ui';g.textAlign='left';
+    lv.forEach((f,j)=>{const p=fibP(d,f),y=Math.round(L.M.y(p))+.5,hue=FIBC[j%FIBC.length];
+      if(j<lv.length-1){g.fillStyle=alpha(hue,.09);g.fillRect(x0,y,x1-x0,L.M.y(fibP(d,lv[j+1]))-y)}
+      g.strokeStyle=hue;g.lineWidth=1;g.beginPath();g.moveTo(x0,y);g.lineTo(x1,y);g.stroke();g.fillStyle=hue;g.fillText(`${+f.toFixed(3)} (${fp(p)})`,x1+4,y+4)});
+    g.setLineDash([3,3]);g.strokeStyle=C.cross;g.lineWidth=1;g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b.x,b.y);if(T==='fibext'){const c=scr(d.c);g.lineTo(c.x,c.y)}g.stroke();g.setLineDash([])}
+  else if(T==='measure'){const up=d.b.p>=d.a.p,cc=up?C.up:C.dn;g.fillStyle=alpha(cc,.13);g.fillRect(a.x,a.y,b.x-a.x,b.y-a.y);g.strokeStyle=cc;g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b.x,b.y);g.stroke();
     const bars=Math.round(idxOf(d.b.t)-idxOf(d.a.t)),pct=(d.b.p/d.a.p-1)*100,txt=`${fp(d.b.p-d.a.p)} (${pct>=0?'+':''}${pct.toFixed(2)}%) · ${bars} bars`;
     g.font='600 12px Inter,system-ui';const tw=g.measureText(txt).width+16,cx=(a.x+b.x)/2,cy=up?Math.min(a.y,b.y)-26:Math.max(a.y,b.y)+6;g.fillStyle=cc;g.fillRect(cx-tw/2,cy,tw,22);g.fillStyle='#fff';g.textAlign='center';g.fillText(txt,cx,cy+15)}
-  else if(d.type==='long'||d.type==='short'){const s=scr(d.c),x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x),w=Math.max(4,x1-x0);
+  else if(T==='prange'){const up=d.b.p>=d.a.p,cc=up?C.up:C.dn,x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x),mx=(x0+x1)/2,pct=d.a.p?(d.b.p/d.a.p-1)*100:0;
+    g.fillStyle=alpha(cc,.13);g.fillRect(x0,a.y,x1-x0,b.y-a.y);g.strokeStyle=cc;g.lineWidth=1;seg({x:x0,y:a.y},{x:x1,y:a.y});seg({x:x0,y:b.y},{x:x1,y:b.y});seg({x:mx,y:a.y},{x:mx,y:b.y});g.fillStyle=cc;arrowHead(g,mx,b.y,up?-Math.PI/2:Math.PI/2,8);
+    box(g,[`${fp(d.b.p-d.a.p)} (${pct>=0?'+':''}${pct.toFixed(2)}%)`],mx,up?Math.min(a.y,b.y)-6:Math.max(a.y,b.y)+6,cc,'#fff',.5,up?1:0)}
+  else if(T==='drange'){const y0=Math.min(a.y,b.y),y1=Math.max(a.y,b.y),my=(y0+y1)/2,bars=Math.round(idxOf(d.b.t)-idxOf(d.a.t));
+    g.fillStyle=alpha(col,.13);g.fillRect(a.x,y0,b.x-a.x,y1-y0);g.lineWidth=1;seg({x:a.x,y:y0},{x:a.x,y:y1});seg({x:b.x,y:y0},{x:b.x,y:y1});seg({x:a.x,y:my},{x:b.x,y:my});g.fillStyle=col;arrowHead(g,b.x,my,b.x>=a.x?0:Math.PI,8);
+    box(g,[`${bars} bars, ${fdur(Math.abs(bars)*ms())}`],(a.x+b.x)/2,y1+6,col,'#fff',.5,0)}
+  else if(T==='long'||T==='short'){const s=scr(d.c),x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x),w=Math.max(4,x1-x0);
     g.fillStyle=alpha(C.up,.16);g.fillRect(x0,Math.min(a.y,b.y),w,Math.abs(b.y-a.y));g.fillStyle=alpha(C.dn,.16);g.fillRect(x0,Math.min(a.y,s.y),w,Math.abs(s.y-a.y));
     g.strokeStyle=C.cross;g.lineWidth=1;g.beginPath();g.moveTo(x0,a.y);g.lineTo(x0+w,a.y);g.stroke();
     const tp=(d.b.p/d.a.p-1)*100,sp=(d.c.p/d.a.p-1)*100,rr=Math.abs(d.a.p-d.c.p)?Math.abs(d.b.p-d.a.p)/Math.abs(d.a.p-d.c.p):0;
     g.font='600 11px Inter,system-ui';g.textAlign='center';const lab=(txt,y,bg)=>{const tw=g.measureText(txt).width+12;g.fillStyle=bg;g.fillRect(x0+w/2-tw/2,y-9,tw,18);g.fillStyle='#fff';g.fillText(txt,x0+w/2,y+4)};
     const dirUp=b.y<a.y;lab(`Target ${fp(d.b.p)} (${tp>=0?'+':''}${tp.toFixed(2)}%)`,b.y+(dirUp?-12:12),C.up);lab(`Stop ${fp(d.c.p)} (${sp>=0?'+':''}${sp.toFixed(2)}%)`,s.y+(dirUp?12:-12),C.dn);lab(`${d.type==='long'?'Long':'Short'} · R:R ${rr.toFixed(2)}`,a.y+(dirUp?12:-12),C.ink)}
-  else if(d.type==='text'){g.font='600 14px Inter,system-ui';g.textAlign='left';g.fillText(d.text||'',a.x,a.y)}
+  else if(T==='text'){const fs=d.fs||14;g.font=`${d.bold===false?'':'600 '}${fs}px Inter,system-ui`;g.textAlign='left';String(d.text||'').split('\n').forEach((s,i)=>g.fillText(s,a.x,a.y+i*fs*1.25))}
+  else if(T==='plabel'){const r=box(g,[fp(d.a.p)],a.x+8,a.y-8,col,'#fff',0,1);g.strokeStyle=col;g.lineWidth=1.5;seg(a,{x:Math.max(r.x,Math.min(r.x+r.w,a.x+8)),y:r.y+r.h});g.fillStyle=col;g.beginPath();g.arc(a.x,a.y,2.5,0,7);g.fill()}
+  else if(T==='markup'||T==='markdn'){const s=T==='markup'?1:-1,x=a.x,y=a.y+s*3;g.beginPath();g.moveTo(x,y);g.lineTo(x+8,y+s*9);g.lineTo(x+3,y+s*9);g.lineTo(x+3,y+s*20);g.lineTo(x-3,y+s*20);g.lineTo(x-3,y+s*9);g.lineTo(x-8,y+s*9);g.closePath();g.fill()}
+  g.setLineDash([]);
   if(sel){g.fillStyle=C.bg;g.strokeStyle=col;g.lineWidth=1.5;for(const k of handles(d)){const p=scr(d[k]);g.beginPath();g.arc(p.x,p.y,4.5,0,7);g.fill();g.stroke()}}
 }
-const handles=d=>d.type==='hline'||d.type==='vline'||d.type==='text'?['a']:['a','b','c'].filter(k=>d[k]);
+const handles=d=>ONEPT.has(d.type)?['a']:['a','b','c'].filter(k=>d[k]);
 function segDist(px,py,a,b){const dx=b.x-a.x,dy=b.y-a.y,l=dx*dx+dy*dy;let t=l?((px-a.x)*dx+(py-a.y)*dy)/l:0;t=Math.max(0,Math.min(1,t));return Math.hypot(px-a.x-t*dx,py-a.y-t*dy)}
 function hit(mx,my){
   if(S.hideDraw)return null;
   for(const d of (S.draw[S.sym]||[]).slice().reverse()){
     for(const k of handles(d)){const p=scr(d[k]);if(Math.hypot(mx-p.x,my-p.y)<9)return{d,h:k}}
-    const a=scr(d.a),b=d.b?scr(d.b):a;let on=false;const inBox=(p,q)=>mx>=Math.min(p.x,q.x)-4&&mx<=Math.max(p.x,q.x)+4&&my>=Math.min(p.y,q.y)-4&&my<=Math.max(p.y,q.y)+4;
-    if(d.type==='trend'||d.type==='arrow')on=segDist(mx,my,a,b)<6;
-    else if(d.type==='ray'){const k=4000/(Math.hypot(b.x-a.x,b.y-a.y)||1);on=segDist(mx,my,a,{x:a.x+(b.x-a.x)*k,y:a.y+(b.y-a.y)*k})<6}
-    else if(d.type==='hline')on=Math.abs(my-a.y)<6;else if(d.type==='vline')on=Math.abs(mx-a.x)<6;
-    else if(d.type==='channel'){const off=d.c?chanOff(d):0,a2=scr({t:d.a.t,p:d.a.p+off}),b2=scr({t:d.b.t,p:d.b.p+off});on=segDist(mx,my,a,b)<6||segDist(mx,my,a2,b2)<6}
-    else if(d.type==='long'||d.type==='short'){const s=scr(d.c);on=mx>=Math.min(a.x,b.x)&&mx<=Math.max(a.x,b.x)&&my>=Math.min(a.y,b.y,s.y)&&my<=Math.max(a.y,b.y,s.y)}
-    else if(d.type==='rect'||d.type==='measure'||d.type==='fib')on=inBox(a,b);
-    else if(d.type==='text')on=mx>=a.x-4&&mx<=a.x+140&&my>=a.y-18&&my<=a.y+4;
+    const T=d.type,a=scr(d.a),b=d.b?scr(d.b):a,tol=Math.max(6,lwOf(d)/2+4);let on=false;const inBox=(p,q)=>mx>=Math.min(p.x,q.x)-4&&mx<=Math.max(p.x,q.x)+4&&my>=Math.min(p.y,q.y)-4&&my<=Math.max(p.y,q.y)+4;
+    if(T==='trend'||T==='ray'||T==='xline'||T==='info'||T==='arrow'){const e=extOf(d),[p,q]=lineExt(a,b,e.l,e.r);on=segDist(mx,my,p,q)<tol}
+    else if(T==='hline')on=Math.abs(my-a.y)<tol;
+    else if(T==='hray')on=Math.abs(my-a.y)<tol&&mx>=a.x-tol;
+    else if(T==='vline')on=Math.abs(mx-a.x)<tol;
+    else if(T==='cross')on=Math.abs(my-a.y)<tol||Math.abs(mx-a.x)<tol;
+    else if(T==='channel'){const off=d.c?chanOff(d):0,a2=scr({t:d.a.t,p:d.a.p+off}),b2=scr({t:d.b.t,p:d.b.p+off});on=segDist(mx,my,a,b)<tol||segDist(mx,my,a2,b2)<tol}
+    else if(T==='long'||T==='short'){const s=scr(d.c);on=mx>=Math.min(a.x,b.x)&&mx<=Math.max(a.x,b.x)&&my>=Math.min(a.y,b.y,s.y)&&my<=Math.max(a.y,b.y,s.y)}
+    else if(T==='rect'||T==='measure'||T==='fib'||T==='prange'||T==='drange')on=inBox(a,b);
+    else if(T==='fibext'){const[x0,x1]=fibX(d),ys=fibLv(d).map(f=>L.M.y(fibP(d,f)));on=mx>=x0-4&&mx<=x1+4&&my>=Math.min(...ys)-4&&my<=Math.max(...ys)+4}
+    else if(T==='ellipse'){const rx=Math.max(4,Math.abs(b.x-a.x)/2),ry=Math.max(4,Math.abs(b.y-a.y)/2);on=((mx-(a.x+b.x)/2)/rx)**2+((my-(a.y+b.y)/2)/ry)**2<=1.15}
+    else if(T==='tri'){const c=scr(d.c);on=inTri(mx,my,a,b,c)||segDist(mx,my,a,b)<tol||segDist(mx,my,b,c)<tol||segDist(mx,my,c,a)<tol}
+    else if(T==='text'){const fs=d.fs||14,ls=String(d.text||'').split('\n'),w=Math.max(...ls.map(s=>s.length))*fs*.6+8;on=mx>=a.x-4&&mx<=a.x+w&&my>=a.y-fs-4&&my<=a.y+(ls.length-1)*fs*1.25+4}
+    else if(T==='plabel'){const w=fp(d.a.p).length*7.5+14;on=(mx>=a.x+4&&mx<=a.x+12+w&&my>=a.y-34&&my<=a.y-4)||Math.hypot(mx-a.x,my-a.y)<8}
+    else if(T==='markup')on=Math.abs(mx-a.x)<10&&my>=a.y-2&&my<=a.y+26;
+    else if(T==='markdn')on=Math.abs(mx-a.x)<10&&my<=a.y+2&&my>=a.y-26;
     if(on)return{d,h:null};
   }
   return null;
 }
 
 /* ---------- tools ---------- */
-const TOOLS=[
-  ['cursor','Crosshair (pan & select)','<path d="M9 2v14M2 9h14"/>'],
-  ['trend','Trend line (Alt+T)','<path d="M3 15L15 3"/><circle cx="3" cy="15" r="1.6"/><circle cx="15" cy="3" r="1.6"/>'],
-  ['ray','Ray','<path d="M3 15L16 2"/><circle cx="3" cy="15" r="1.6"/><circle cx="8" cy="10" r="1.6"/>'],
-  ['arrow','Arrow','<path d="M3 15L14 4"/><path d="M8 4h6v6"/>'],
-  ['hline','Horizontal line (Alt+H)','<path d="M1 9h16"/><circle cx="9" cy="9" r="1.6"/>'],
-  ['vline','Vertical line (Alt+V)','<path d="M9 1v16"/><circle cx="9" cy="9" r="1.6"/>'],
-  ['channel','Parallel channel','<path d="M2 12L12 3M6 16L16 7"/>'],
-  ['rect','Rectangle','<rect x="3" y="4" width="12" height="10" rx="1"/>'],
-  ['fib','Fib retracement (Alt+F)','<path d="M2 3h14M2 7h14M2 10h14M2 15h14"/>'],
-  ['long','Long position','<rect x="3" y="3" width="12" height="6" fill="currentColor" opacity=".25"/><rect x="3" y="9" width="12" height="6"/><path d="M3 9h12"/>'],
-  ['short','Short position','<rect x="3" y="3" width="12" height="6"/><rect x="3" y="9" width="12" height="6" fill="currentColor" opacity=".25"/><path d="M3 9h12"/>'],
-  ['measure','Measure','<path d="M3 15V3h12"/><path d="M3 9h6M9 3v6"/>'],
-  ['text','Text note','<path d="M4 4h10M9 4v11"/>'],
-  ['hr'],
-  ['magnet','Magnet: snap to open/high/low/close','<path d="M4 3v6a5 5 0 0010 0V3"/><path d="M4 6h3M11 6h3"/>'],
-  ['undo','Undo (Ctrl+Z)','<path d="M5 7h7a4 4 0 010 8H8"/><path d="M8 4L5 7l3 3"/>'],
-  ['hidedraw','Hide all drawings','<path d="M1.5 9s3-5.5 7.5-5.5S16.5 9 16.5 9s-3 5.5-7.5 5.5S1.5 9 1.5 9z"/><circle cx="9" cy="9" r="2.2"/>'],
+const IS_MAC=/Mac|iPhone|iPad|iPod/.test(navigator.platform||navigator.userAgent||''),MOD=IS_MAC?'⌘':'Ctrl+',ALT=IS_MAC?'⌥':'Alt+';
+const TD={   // tool: [name, icon, shortcut]
+  cursor:['Crosshair (pan and select)','<path d="M9 2v14M2 9h14"/>'],
+  eraser:['Eraser','<path d="M7.5 15.5h8"/><path d="M3.3 11.2l6.9-6.9a1.5 1.5 0 012.1 0l2.4 2.4a1.5 1.5 0 010 2.1l-6.2 6.2H6.1z"/><path d="M6.5 8l4.5 4.5"/>'],
+  trend:['Trend line','<path d="M3 15L15 3"/><circle cx="3" cy="15" r="1.6"/><circle cx="15" cy="3" r="1.6"/>',ALT+'T'],
+  ray:['Ray','<path d="M3 15L16 2"/><circle cx="3" cy="15" r="1.6"/><circle cx="8" cy="10" r="1.6"/>'],
+  info:['Info line','<path d="M2.5 13.5L10 6"/><circle cx="2.5" cy="13.5" r="1.4"/><rect x="10" y="9" width="6.5" height="6.5" rx="1"/><path d="M13.25 11.4v2.4"/>'],
+  xline:['Extended line','<path d="M1 16L17 2"/><circle cx="6" cy="11.7" r="1.6"/><circle cx="12" cy="6.3" r="1.6"/>'],
+  hline:['Horizontal line','<path d="M1 9h16"/><circle cx="9" cy="9" r="1.6"/>',ALT+'H'],
+  hray:['Horizontal ray','<path d="M5 9h12"/><circle cx="5" cy="9" r="1.6"/>',ALT+'J'],
+  vline:['Vertical line','<path d="M9 1v16"/><circle cx="9" cy="9" r="1.6"/>',ALT+'V'],
+  cross:['Cross line','<path d="M1 9h16M9 1v16"/><circle cx="9" cy="9" r="1.6"/>',ALT+'C'],
+  channel:['Parallel channel','<path d="M2 12L12 3M6 16L16 7"/>'],
+  fib:['Fib retracement','<path d="M2 3h14M2 7h14M2 10h14M2 15h14"/>',ALT+'F'],
+  fibext:['Trend-based fib extension','<path d="M8 3h9M8 7h9M8 11h9M8 15h9"/><path d="M1.5 14L4 6l2.5 5"/>'],
+  long:['Long position','<rect x="3" y="3" width="12" height="6" fill="currentColor" opacity=".25"/><rect x="3" y="9" width="12" height="6"/><path d="M3 9h12"/>'],
+  short:['Short position','<rect x="3" y="3" width="12" height="6"/><rect x="3" y="9" width="12" height="6" fill="currentColor" opacity=".25"/><path d="M3 9h12"/>'],
+  prange:['Price range','<path d="M4 3h10M4 15h10M9 15V4.5"/><path d="M6.5 6.5L9 4l2.5 2.5"/>'],
+  drange:['Date range','<path d="M3 4v10M15 4v10M3.5 9H14"/><path d="M11.5 6.5L14 9l-2.5 2.5"/>'],
+  measure:['Date and price range','<path d="M3 15V3h12"/><path d="M3 9h6M9 3v6"/>'],
+  rect:['Rectangle','<rect x="3" y="4" width="12" height="10" rx="1"/>',IS_MAC?'⌥⇧R':'Alt+Shift+R'],
+  ellipse:['Ellipse','<ellipse cx="9" cy="9" rx="7" ry="5"/>'],
+  tri:['Triangle','<path d="M9 3l7 12H2z"/>'],
+  arrow:['Arrow','<path d="M3 15L14 4"/><path d="M8 4h6v6"/>'],
+  text:['Text note','<path d="M4 4h10M9 4v11"/>'],
+  plabel:['Price label','<path d="M2.5 4h9.5l3.5 3.5-3.5 3.5H2.5z"/><path d="M2.5 11v5"/>'],
+  markup:['Arrow mark up','<path d="M9 3l5 6h-3v6H7V9H4z"/>'],
+  markdn:['Arrow mark down','<path d="M9 15l5-6h-3V3H7v6H4z"/>']};
+const GROUPS={cursors:['cursor','eraser'],lines:['trend','ray','info','xline','hline','hray','vline','cross','channel'],fibs:['fib','fibext'],
+  proj:['long','short','prange','drange','measure'],shapes:['rect','ellipse','tri','arrow'],notes:['text','plabel','markup','markdn']};
+const GNAME={cursors:'cursors',lines:'line tools',fibs:'Fibonacci tools',proj:'position and range tools',shapes:'shapes',notes:'notes and labels'};
+const RAILX=[   // [key, title, icon, is it on?]
+  ['magnet','Magnet: snap to open/high/low/close','<path d="M4 3v6a5 5 0 0010 0V3"/><path d="M4 6h3M11 6h3"/>',()=>S.magnet],
+  ['stay','Stay in drawing mode','<path d="M3 15l1-4 7.5-7.5 3 3L7 14z"/><path d="M10 5l3 3"/>',()=>S.stay],
+  ['lockall','Lock all drawings','<rect x="4" y="8" width="10" height="8" rx="1.5"/><path d="M6 8V5.5a3 3 0 016 0V8"/>',()=>S.lockAll],
+  ['hidedraw','Hide all drawings','<path d="M1.5 9s3-5.5 7.5-5.5S16.5 9 16.5 9s-3 5.5-7.5 5.5S1.5 9 1.5 9z"/><circle cx="9" cy="9" r="2.2"/>',()=>S.hideDraw],
   ['clear','Remove all drawings on this symbol','<path d="M3 5h12M7 5V3h4v2M5 5l1 11h6l1-11"/>'],
+  ['hr'],
+  ['undo','Undo (Ctrl+Z)','<path d="M5 7h7a4 4 0 010 8H8"/><path d="M8 4L5 7l3 3"/>'],
   ['fit','Reset chart view (Alt+R or double-click the chart)','<path d="M2 6V2h4M12 2h4v4M16 12v4h-4M6 16H2v-4"/>']];
-function renderRail(){$('#rail').innerHTML=TOOLS.map(([k,t,p])=>k==='hr'?'<hr>':`<button data-k="${k}" title="${t}" aria-label="${t}" class="${S.tool===k||(k==='magnet'&&S.magnet)||(k==='hidedraw'&&S.hideDraw)?'on':''}"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">${p}</svg></button>`).join('')}
+const svgT=(k,s=18)=>`<svg width="${s}" height="${s}" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${TD[k]?TD[k][1]:''}</svg>`;
+const grpOf=k=>Object.keys(GROUPS).find(g=>GROUPS[g].includes(k));
+const toolTitle=k=>TD[k][0]+(TD[k][2]?` (${TD[k][2]})`:'');
+function setTool(k){if(!TD[k])return;S.tool=k;S.pending=null;const g=grpOf(k);if(g&&S.grp[g]!==k){S.grp[g]=k;store.set('toolGroups',S.grp)}renderRail()}
+function renderRail(){
+  $('#rail').innerHTML=Object.entries(GROUPS).map(([g,ks])=>{const k=grpOf(S.tool)===g?S.tool:ks.includes(S.grp[g])?S.grp[g]:ks[0],on=S.tool===k,t=toolTitle(k);
+    return`<div class="rg"><button data-k="${k}" data-g="${g}" title="${t}" aria-label="${t}" aria-pressed="${on}" class="${on?'on':''}">${svgT(k)}</button>`+
+      (ks.length>1?`<button class="car" data-fly="${g}" title="More ${GNAME[g]}" aria-label="More ${GNAME[g]}" aria-haspopup="menu"><svg width="5" height="5" viewBox="0 0 5 5"><path d="M5 0v5H0z" fill="currentColor"/></svg></button>`:'')+'</div>'}).join('')+'<hr>'+
+    RAILX.map(([k,t,p,f])=>{if(k==='hr')return'<hr>';const on=f?!!f():null;return`<button data-k="${k}" title="${t}" aria-label="${t}"${on!=null?` aria-pressed="${on}"`:''} class="${on?'on':''}"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${p}</svg></button>`}).join('')}
+function openFly(g,el){const o='fly:'+g;if(menuJustClosed(o))return;const r=(el.closest('.rg')||el).getBoundingClientRect();
+  openMenu(GROUPS[g].map(k=>({label:TD[k][0],svg:k,key:TD[k][2],cur:S.tool===k,act:()=>{setTool(k);draw()}})),0,0,0,{left:r.left,right:r.right,top:r.top,bottom:r.bottom},o)}
 const saveDraw=()=>store.set('draw',S.draw);
 function pushHist(){S.hist.push(JSON.stringify(S.draw[S.sym]||[]));if(S.hist.length>60)S.hist.shift()}
 function pushStudyHist(){S.hist.push({studies:JSON.stringify(S.studies.map(({uid,id,p,hide,colors,off,sid})=>({uid,id,p,hide,colors,off,sid})))});if(S.hist.length>60)S.hist.shift()}
 function undo(){if(!S.hist.length)return toast('Nothing to undo');const h=S.hist.pop();
   if(h&&h.studies){S.studies=JSON.parse(h.studies);saveStudies();recalc(true);buildLegend();renderTester();draw();return}
   S.draw[S.sym]=JSON.parse(h);S.sel=null;saveDraw();draw()}
-function commit(d){delete d.stage;if(S.hideDraw){S.hideDraw=false;store.set('hideDraw',false)}pushHist();(S.draw[S.sym]=S.draw[S.sym]||[]).push(d);S.sel=d;S.pending=null;S.tool='cursor';renderRail();saveDraw();draw()}
-$('#rail').addEventListener('click',e=>{const k=e.target.closest('button')?.dataset.k;if(!k)return;
+function commit(d){delete d.stage;if(S.hideDraw){S.hideDraw=false;store.set('hideDraw',false)}pushHist();(S.draw[S.sym]=S.draw[S.sym]||[]).push(d);S.sel=d;S.pending=null;if(!S.stay)S.tool='cursor';renderRail();saveDraw();draw()}
+let railSkip=0,RLP=null;
+$('#rail').addEventListener('click',e=>{if(railSkip){const skip=Date.now()<railSkip;railSkip=0;if(skip)return}   // the tap that ends a press-and-hold
+  const f=e.target.closest('[data-fly]');if(f){openFly(f.dataset.fly,f);return}
+  const k=e.target.closest('button')?.dataset.k;if(!k)return;
   if(k==='magnet'){S.magnet=!S.magnet;store.set('magnet',S.magnet)}
+  else if(k==='stay'){S.stay=!S.stay;store.set('stay',S.stay);toast(S.stay?'Stay in drawing mode is on: the tool stays picked after each drawing':'Stay in drawing mode is off')}
+  else if(k==='lockall'){S.lockAll=!S.lockAll;store.set('lockAll',S.lockAll);toast(S.lockAll?'All drawings locked':'All drawings unlocked')}
   else if(k==='undo')undo();
   else if(k==='clear')removeDrawings();
   else if(k==='hidedraw')toggleHideDraw();
   else if(k==='fit')resetView();
-  else{S.tool=k;S.pending=null}
+  else{setTool(k);draw();return}
   renderRail();draw()});
+/* right-click or press and hold a tool for the rest of its group */
+$('#rail').addEventListener('contextmenu',e=>{e.preventDefault();const b=e.target.closest('.rg');if(b)openFly(b.querySelector('[data-g]').dataset.g,b)});
+$('#rail').addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;const b=e.target.closest('.rg');if(!b)return;clearTimeout(RLP);
+  RLP=setTimeout(()=>{RLP=null;railSkip=Date.now()+700;openFly(b.querySelector('[data-g]').dataset.g,b)},450)});
+const rlpEnd=()=>{clearTimeout(RLP);RLP=null};['pointerup','pointercancel','pointerleave'].forEach(t=>$('#rail').addEventListener(t,rlpEnd));
+function eraseAt(m){const D=S.drag,h=L&&m.y<L.mainH&&hit(m.x,m.y);if(!D||!h)return;
+  if(h.d.locked||S.lockAll){if(!D.warned){D.warned=true;toast(S.lockAll?'Drawings are locked. Unlock them on the left toolbar to erase.':'That drawing is locked. Unlock it to erase it.')}return}
+  if(!D.pushed){pushHist();D.pushed=true}S.draw[S.sym]=(S.draw[S.sym]||[]).filter(x=>x!==h.d);if(S.sel===h.d)S.sel=null;saveDraw()}
 
 const pos=e=>{const r=cv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}};
 /* two-finger pinch: sideways = zoom time, up/down = stretch price scale; the midpoint moves the chart (two-finger pan) */
@@ -1326,16 +1442,17 @@ cv.addEventListener('pointerdown',e=>{
   if(S.rp.pick){const i=Math.round(L.start+m.x/S.bw-.5);startReplay(Math.max(20,Math.min(S.base.length-2,i)));return}
   const inMain=m.y<L.mainH;closePop();
   if(S.tool==='cursor'&&inMain){const hm=markerAt(m.x,m.y);if(hm){showPop(hm,m);return}}
+  if(S.tool==='eraser'&&inMain){S.drag={erase:true};eraseAt(m);draw();return}
   if(S.tool!=='cursor'&&inMain){const pt=ptAt(m.x,m.y),T=S.tool;
-    if(T==='hline'||T==='vline')return commit({type:T,a:pt});
+    if(ONEPT.has(T)&&T!=='text')return commit({type:T,a:pt});
     if(T==='text'){textNote(pt,m);return}
     if(T==='long'||T==='short'){const dir=T==='long'?1:-1,bt=timeOf(idxOf(pt.t)+Math.max(12,Math.round(160/S.bw)));return commit({type:T,a:pt,b:{t:bt,p:pt.p*(1+dir*.03)},c:{t:bt,p:pt.p*(1-dir*.015)}})}
-    if(!S.pending){S.pending={type:T,a:pt,b:{...pt},stage:1};if(T==='channel')S.pending.c={...pt};else S.drag={place:true}}
-    else if(S.pending.type==='channel'&&S.pending.stage===1){S.pending.b=pt;S.pending.c={...pt};S.pending.stage=2}
-    else{if(S.pending.type==='channel')S.pending.c=pt;else S.pending.b=pt;commit(S.pending)}
+    if(!S.pending){S.pending={type:T,a:pt,b:{...pt},stage:1};if(THREEPT.has(T))S.pending.c={...pt};else S.drag={place:true}}
+    else if(THREEPT.has(S.pending.type)&&S.pending.stage===1){S.pending.b=pt;S.pending.c={...pt};S.pending.stage=2}
+    else{if(THREEPT.has(S.pending.type))S.pending.c=pt;else S.pending.b=pt;commit(S.pending)}
     draw();return}
   const h=inMain&&hit(m.x,m.y);
-  if(h&&h.d.locked){S.sel=h.d;S.drag={pan:true,x:m.x,y:m.y,end:S.end,yo:S.yo||0,v:inMain};draw();return}   // locked: select, never move
+  if(h&&(h.d.locked||S.lockAll)){S.sel=h.d;S.drag={pan:true,x:m.x,y:m.y,end:S.end,yo:S.yo||0,v:inMain};draw();return}   // locked: select, never move
   if(h){S.sel=h.d;pushHist();const d=h.d;S.drag={shape:d,h:h.h,start:ptAt(m.x,m.y),a:{...d.a},b:d.b&&{...d.b},c:d.c&&{...d.c}};draw();return}
   S.sel=null;S.drag={pan:true,x:m.x,y:m.y,end:S.end,yo:S.yo||0,v:inMain};draw();
 });
@@ -1344,11 +1461,12 @@ cv.addEventListener('pointermove',e=>{if(PINCH)return;
   if(D?.pan){S.end=D.end-(m.x-D.x)/S.bw;if(D.v)S.yo=D.yo+(m.y-D.y)/L.mainH*1.18*(S.inv?-1:1)}
   else if(D?.axis)S.ys=Math.max(.05,Math.min(20,D.ys*Math.exp((m.y-D.y)/150)));
   else if(D?.taxis){const nb=Math.max(1.5,Math.min(80,D.bw*Math.exp((m.x-D.x)/200)));S.bw=nb;S.end=D.end}
+  else if(D?.erase)eraseAt(m);
   else if(D?.shape){const p=ptAt(m.x,m.y),s=D.shape;
     if(D.h==='a')s.a=p;else if(D.h==='b'){s.b=p;if(s.c&&(s.type==='long'||s.type==='short'))s.c.t=p.t}else if(D.h==='c'){s.c=(s.type==='long'||s.type==='short')?{t:s.b.t,p:p.p}:p}
     else{const dt=p.t-D.start.t,dp=p.p-D.start.p;for(const k of['a','b','c'])if(D[k])s[k]={t:D[k].t+dt,p:D[k].p+dp}}}
-  else if(S.pending){const p=ptAt(m.x,m.y);if(S.pending.stage===2)S.pending.c=p;else{S.pending.b=p;if(S.pending.type==='channel')S.pending.c=p}}
-  if(!D&&L)cv.style.cursor=m.x>=L.pw?'ns-resize':m.y>=L.H-TAX?'ew-resize':S.tool!=='cursor'||S.rp.pick?'crosshair':(m.y<L.mainH&&hit(m.x,m.y))?'move':(m.y<L.mainH&&markerAt(m.x,m.y))?'pointer':'crosshair';
+  else if(S.pending){const p=ptAt(m.x,m.y);if(S.pending.stage===2)S.pending.c=p;else{S.pending.b=p;if(THREEPT.has(S.pending.type))S.pending.c=p}}
+  if(!D&&L)cv.style.cursor=m.x>=L.pw?'ns-resize':m.y>=L.H-TAX?'ew-resize':S.tool==='eraser'?'cell':S.tool!=='cursor'||S.rp.pick?'crosshair':(m.y<L.mainH&&hit(m.x,m.y))?'move':(m.y<L.mainH&&markerAt(m.x,m.y))?'pointer':'crosshair';
   draw();
 });
 const up=()=>{const D=S.drag;S.drag=null;
@@ -1360,7 +1478,7 @@ cv.addEventListener('pointerleave',()=>{if(!S.drag){S.mouse=null;draw()}});
 cv.addEventListener('wheel',e=>{e.preventDefault();closePop();closeMenu();if(!L)return;const m=pos(e);
   if(e.shiftKey||Math.abs(e.deltaX)>Math.abs(e.deltaY)){S.end+=(e.deltaX||e.deltaY)/S.bw;return draw()}
   const anchor=L.start+m.x/S.bw,nb=Math.max(1.5,Math.min(80,S.bw*Math.exp(-e.deltaY*.0015)));S.bw=nb;S.end=anchor-m.x/nb+L.pw/nb;draw()},{passive:false});
-cv.addEventListener('dblclick',e=>{const m=pos(e);if(!L)return;if(m.x>=L.pw){S.ys=1;S.yo=0;return draw()}if(m.y<L.mainH){const h=hit(m.x,m.y);if(h){if(h.d.type==='text')editText(h.d);return}}resetView()});
+cv.addEventListener('dblclick',e=>{const m=pos(e);if(!L)return;if(m.x>=L.pw){S.ys=1;S.yo=0;return draw()}if(m.y<L.mainH){const h=hit(m.x,m.y);if(h){if(h.d.type==='text'&&!String(h.d.text||'').includes('\n'))editText(h.d);else openDrawSettings(h.d);return}}resetView()});
 function markerAt(x,y){const out=[];for(const h of MKH){const onLab=h.ly!=null&&Math.abs(h.x-x)<h.lw/2+4&&Math.abs(h.ly-y)<10,d=Math.hypot(h.x-x,h.y-y);if(onLab||d<16)out.push({h,s:onLab?0:d})}
   out.sort((a,b)=>a.s-b.s);const seen=new Set(),r=[];for(const o of out){const k=o.h.mk.i+'|'+o.h.mk.k+'|'+o.h.mk.id+'|'+o.h.mk.dir;if(!seen.has(k)){seen.add(k);r.push(o.h)}}return r.length?r.slice(0,4):null}
 function closePop(){document.querySelectorAll('.mkpop').forEach(e=>e.remove())}
@@ -1394,7 +1512,6 @@ function textNote(pt,m){
   inp.addEventListener('keydown',e=>{if(e.key==='Enter')fin(true);if(e.key==='Escape')fin(false)});inp.addEventListener('blur',()=>fin(true));
 }
 /* ---------- right-click menus (TradingView-style) ---------- */
-const IS_MAC=/Mac|iPhone|iPad|iPod/.test(navigator.platform||navigator.userAgent||''),MOD=IS_MAC?'⌘':'Ctrl+',ALT=IS_MAC?'⌥':'Alt+';
 const MI={reset:'<path d="M3 8a5 5 0 1 0 1.5-3.6"/><path d="M3 2.5V5h2.5"/>',copy:'<rect x="5" y="5" width="8.5" height="8.5" rx="1.5"/><path d="M3 10.5V3.5a1 1 0 0 1 1-1h6.5"/>',
   paste:'<rect x="3.5" y="3" width="9" height="11" rx="1.5"/><path d="M6 3V2h4v1"/>',bell:'<path d="M4 11V7a4 4 0 0 1 8 0v4l1 1.5H3z"/><path d="M6.5 14a1.5 1.5 0 0 0 3 0"/>',
   hline:'<path d="M1.5 8h13"/><circle cx="8" cy="8" r="1.6"/>',ind:'<path d="M2 12l3.5-4 2.5 2.5L13.5 4"/><path d="M2 2.5v11h12"/>',
@@ -1403,29 +1520,38 @@ const MI={reset:'<path d="M3 8a5 5 0 1 0 1.5-3.6"/><path d="M3 2.5V5h2.5"/>',cop
   lock:'<rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>',unlock:'<rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 4.8-1"/>',
   clone:'<rect x="2.5" y="2.5" width="7" height="7" rx="1.2"/><rect x="6.5" y="6.5" width="7" height="7" rx="1.2"/>',order:'<path d="M3 4.5h10M3 8h10M3 11.5h6"/>',
   text:'<path d="M3.5 3.5h9M8 3.5V13"/>',code:'<path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5"/>',latest:'<path d="M2.5 8h9M8.5 4.5L12 8l-3.5 3.5M14 3v10"/>',
-  check:'<path d="M3 8.5l3 3 7-7"/>'};
+  check:'<path d="M3 8.5l3 3 7-7"/>',pen:'<path d="M3 13l.8-3.2L11 2.6l2.4 2.4-7.2 7.2z"/><path d="M9.5 4.1l2.4 2.4"/>',
+  bucket:'<path d="M2.5 7.5L7 3l5 5-4.5 4.5a1.4 1.4 0 0 1-2 0l-3-3a1.4 1.4 0 0 1 0-2z"/><path d="M2.5 8h9.5"/><path d="M13.5 10.5s1 1.4 1 2.1a1 1 0 0 1-2 0c0-.7 1-2.1 1-2.1z"/>',
+  dots:'<circle cx="3.5" cy="8" r=".9" fill="currentColor"/><circle cx="8" cy="8" r=".9" fill="currentColor"/><circle cx="12.5" cy="8" r=".9" fill="currentColor"/>',
+  grip:'<circle cx="6" cy="4" r=".8" fill="currentColor"/><circle cx="10" cy="4" r=".8" fill="currentColor"/><circle cx="6" cy="8" r=".8" fill="currentColor"/><circle cx="10" cy="8" r=".8" fill="currentColor"/><circle cx="6" cy="12" r=".8" fill="currentColor"/><circle cx="10" cy="12" r=".8" fill="currentColor"/>',
+  plus:'<path d="M8 3v10M3 8h10"/>'};
 const svgI=k=>k&&MI[k]?`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${MI[k]}</svg>`:'';
 const CM=[];   // open menu levels (0 = the menu, 1 = a submenu)
+let lastClose={owner:null,t:0};
 function closeMenu(lv=0){while(CM.length>lv)CM.pop().el.remove()}
-function openMenu(items,x,y,lv=0,anchor){
+const menuJustClosed=o=>{const r=!!o&&lastClose.owner===o&&Date.now()-lastClose.t<600;lastClose={owner:null,t:0};return r};   // true once, right after a press outside closed that menu
+function openMenu(items,x,y,lv=0,anchor,owner){
   closeMenu(lv);const it=[];
   for(const i of items){if(!i)continue;if(i==='-'&&(!it.length||it[it.length-1]==='-'))continue;it.push(i)}while(it[it.length-1]==='-')it.pop();
   if(!it.length)return null;
   const el=document.createElement('div');el.className='cm';el.setAttribute('role','menu');el.tabIndex=-1;
-  el.innerHTML=it.map((i,k)=>i==='-'?'<hr>':i.swatches?`<div class="cmsw" role="group" aria-label="Colour">${i.swatches.map(c=>`<button type="button" data-sw="${c}" style="background:${c}" class="${(i.on||'').toLowerCase()===c?'on':''}" aria-label="Colour ${c}"></button>`).join('')}</div>`
-    :`<button type="button" class="cmi" role="${i.check!=null?'menuitemcheckbox':'menuitem'}"${i.check!=null?` aria-checked="${!!i.check}"`:''}${i.sub?' aria-haspopup="menu"':''} data-k="${k}"${i.disabled?' disabled':''}><span class="cmic">${i.check?svgI('check'):svgI(i.icon)}</span><span class="cml">${esc(i.label)}</span>${i.sub?'<span class="cmk">›</span>':i.key?`<kbd class="cmk">${esc(i.key)}</kbd>`:''}</button>`).join('');
+  el.innerHTML=it.map((i,k)=>i==='-'?'<hr>':i.swatches?`<div class="cmsw${i.wide?' pal':''}" role="group" aria-label="Colour">${i.swatches.map(c=>`<button type="button" data-sw="${c}" style="background:${c}" class="${(i.on||'').toLowerCase()===c?'on':''}" aria-label="Colour ${c}"></button>`).join('')}</div>`
+    :i.range?`<div class="cmrg"><label for="cmrg${lv}_${k}">${esc(i.range.label)}</label><input type="range" id="cmrg${lv}_${k}" data-rg="${k}" min="${i.range.min}" max="${i.range.max}" step="${i.range.step||1}" value="${i.range.value}"><output>${i.range.value}${i.range.unit||''}</output></div>`
+    :`<button type="button" class="cmi${i.cur?' cur':''}" role="${i.check!=null?'menuitemcheckbox':i.cur!=null?'menuitemradio':'menuitem'}"${i.check!=null?` aria-checked="${!!i.check}"`:i.cur!=null?` aria-checked="${!!i.cur}"`:''}${i.sub?' aria-haspopup="menu"':''} data-k="${k}"${i.disabled?' disabled':''}><span class="cmic">${i.check?svgI('check'):i.svg?svgT(i.svg):svgI(i.icon)}</span><span class="cml">${esc(i.label)}</span>${i.sub?'<span class="cmk">›</span>':i.key?`<kbd class="cmk">${esc(i.key)}</kbd>`:''}</button>`).join('');
   document.body.append(el);
   const W=innerWidth,H=innerHeight,w=el.offsetWidth,h=el.offsetHeight;let left=x,top=y;
-  if(anchor){left=anchor.right-2;if(left+w>W-6)left=anchor.left-w+2;top=anchor.top-5}
+  if(anchor&&anchor.below){left=anchor.left;top=anchor.bottom+4;if(top+h>H-6&&anchor.top-h-4>=6)top=anchor.top-h-4}
+  else if(anchor){left=anchor.right-2;if(left+w>W-6)left=anchor.left-w+2;top=anchor.top-5}
   el.style.left=Math.max(6,Math.min(W-w-6,left))+'px';el.style.top=Math.max(6,Math.min(H-h-6,top))+'px';
-  const level={el,from:null};CM[lv]=level;
+  const level={el,from:null,owner};CM[lv]=level;
   const btns=()=>[...el.querySelectorAll('.cmi:not(:disabled)')],mark=b=>btns().forEach(x=>x.classList.toggle('act',x===b));
   const sub=(b,i,focus)=>{if(!CM[lv+1]||CM[lv+1].from!==b){const s=openMenu(i.sub,0,0,lv+1,b.getBoundingClientRect());if(s)CM[lv+1].from=b}
     if(focus&&CM[lv+1]){const f=CM[lv+1].el.querySelector('.cmi:not(:disabled)');if(f){f.classList.add('act');f.focus({preventScroll:true})}}};
   const run=b=>{const i=it[+b.dataset.k];if(!i||i.disabled)return;if(i.sub)return sub(b,i,true);closeMenu();if(i.act)i.act()};
   el.addEventListener('click',e=>{const s=e.target.closest('[data-sw]');if(s){const i=it.find(x=>x&&x.swatches);closeMenu();i.pick(s.dataset.sw);return}const b=e.target.closest('.cmi');if(b)run(b)});
   el.addEventListener('pointerover',e=>{const b=e.target.closest('.cmi');if(!b||b.disabled)return;mark(b);const i=it[+b.dataset.k];if(i.sub)sub(b,i,false);else closeMenu(lv+1)});
-  el.addEventListener('keydown',e=>{e.stopPropagation();const bs=btns();let a=bs.indexOf(el.querySelector('.cmi.act'));
+  el.addEventListener('input',e=>{const r=e.target.closest('[data-rg]');if(!r)return;const i=it[+r.dataset.rg];if(!r.dataset.go){r.dataset.go='1';if(i.start)i.start()}i.on(+r.value);r.nextElementSibling.textContent=r.value+(i.range.unit||'')});
+  el.addEventListener('keydown',e=>{e.stopPropagation();if(e.target.matches('input')&&e.key!=='Escape'&&e.key!=='Tab')return;const bs=btns();let a=bs.indexOf(el.querySelector('.cmi.act'));
     if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!bs.length)return;a=e.key==='ArrowDown'?(a+1)%bs.length:(a<=0?bs.length-1:a-1);mark(bs[a]);bs[a].focus({preventScroll:true});closeMenu(lv+1)}
     else if(e.key==='Enter'||e.key===' '||e.key==='ArrowRight'){const b=bs[a];if(!b)return;e.preventDefault();if(e.key==='ArrowRight'&&!it[+b.dataset.k].sub)return;run(b)}
     else if(e.key==='ArrowLeft'&&lv){e.preventDefault();closeMenu(lv);CM[lv-1]?.el.querySelector('.cmi.act')?.focus({preventScroll:true})}
@@ -1433,12 +1559,12 @@ function openMenu(items,x,y,lv=0,anchor){
   el.addEventListener('contextmenu',e=>e.preventDefault());
   if(!lv)el.focus({preventScroll:true});
   return el}
-document.addEventListener('pointerdown',e=>{if(CM.length&&!CM.some(l=>l.el.contains(e.target)))closeMenu()},true);
+document.addEventListener('pointerdown',e=>{if(CM.length&&!CM.some(l=>l.el.contains(e.target))){lastClose={owner:CM[0].owner,t:Date.now()};closeMenu()}},true);   // remembered so a click on the button that opened it just closes it
 addEventListener('resize',()=>closeMenu());addEventListener('blur',()=>closeMenu());
 
 /* what each menu does */
-const DNAME={trend:'Trend line',ray:'Ray',arrow:'Arrow',hline:'Horizontal line',vline:'Vertical line',channel:'Parallel channel',rect:'Rectangle',fib:'Fib retracement',long:'Long position',short:'Short position',measure:'Measure',text:'Text note'};
-const COLORABLE=new Set(['trend','ray','arrow','hline','vline','channel','rect','text']),SWATCH=['#2962ff','#f23645','#089981','#ff9800','#9c27b0','#00bcd4','#f59f00','#787b86'];
+const DNAME=Object.fromEntries(Object.entries(TD).map(([k,v])=>[k,v[0]]));
+const COLORABLE=new Set(['trend','ray','info','xline','arrow','hline','hray','vline','cross','channel','rect','ellipse','tri','drange','text','plabel','markup','markdn']),SWATCH=['#2962ff','#f23645','#089981','#ff9800','#9c27b0','#00bcd4','#f59f00','#787b86'];
 const plainP=p=>p.toFixed(Math.min(8,dec(p)));
 function mainPt(){const m=S.mouse;if(!L||!m||m.x<0||m.y<0||m.x>=L.pw||m.y>=L.mainH)return null;return{t:timeOf(Math.round(L.start+m.x/S.bw-.5)),p:L.M.p(m.y)}}
 function resetView(){S.end=S.c.length+8;S.bw=8;S.ys=1;S.yo=0;draw()}
@@ -1453,10 +1579,10 @@ function removeAlert(a){S.alerts=S.alerts.filter(x=>x!==a);store.set('alerts',S.
 function addHLine(p,t){if(p==null||!isFinite(p)||!S.c.length)return;commit({type:'hline',a:{t:t??S.c[S.c.length-1].t,p:+plainP(p)}})}
 const shiftD=(d,dt,dp)=>{for(const k of['a','b','c'])if(d[k])d[k]={t:d[k].t+dt,p:d[k].p+dp}};
 const nudgeP=d=>L?(L.M.hi-L.M.lo)*.04:Math.abs(d.a.p)*.01;
-function cloneDrawing(d){const c=JSON.parse(JSON.stringify(d));delete c.locked;if(c.type==='hline')shiftD(c,0,nudgeP(c));else shiftD(c,5*ms(),0);commit(c);toast(`${DNAME[d.type]||'Drawing'} cloned`)}
+function cloneDrawing(d){const c=JSON.parse(JSON.stringify(d));delete c.locked;if(c.type==='hline'||c.type==='hray')shiftD(c,0,nudgeP(c));else shiftD(c,5*ms(),0);commit(c);toast(`${DNAME[d.type]||'Drawing'} cloned`)}
 function copyDrawing(d){S.clip=JSON.parse(JSON.stringify(d));delete S.clip.locked;toast(`${DNAME[d.type]||'Drawing'} copied. Paste it with ${MOD}V or right-click the chart.`)}
 function pasteDrawing(at){if(!S.clip||!S.c.length)return;const d=JSON.parse(JSON.stringify(S.clip));
-  if(at)shiftD(d,at.t-d.a.t,at.p-d.a.p);else if(d.type==='hline')shiftD(d,0,nudgeP(d));else shiftD(d,5*ms(),0);
+  if(at)shiftD(d,at.t-d.a.t,at.p-d.a.p);else if(d.type==='hline'||d.type==='hray')shiftD(d,0,nudgeP(d));else shiftD(d,5*ms(),0);
   commit(d);toast(`${DNAME[d.type]||'Drawing'} pasted`)}
 function removeDrawing(d){pushHist();S.draw[S.sym]=(S.draw[S.sym]||[]).filter(x=>x!==d);if(S.sel===d)S.sel=null;saveDraw();draw()}
 function removeDrawings(){if(!(S.draw[S.sym]||[]).length)return;pushHist();S.draw[S.sym]=[];S.sel=null;saveDraw();toast(`Drawings removed. ${MOD}Z to undo.`);draw()}
@@ -1486,12 +1612,13 @@ function mainMenu(m){
 function drawMenu(d){const l=S.draw[S.sym]||[],j=l.indexOf(d);
   return[COLORABLE.has(d.type)&&{swatches:SWATCH,on:d.color||'#2962ff',pick:c=>{pushHist();d.color=c;saveDraw();draw()}},
     d.type==='text'&&{label:'Edit text…',icon:'text',act:()=>editText(d)},
-    d.type==='hline'&&{label:`Add alert at ${fp(d.a.p)}`,icon:'bell',act:()=>addAlert(d.a.p)},'-',
+    ALERTY.has(d.type)&&{label:`Add alert at ${fp(d.a.p)}`,icon:'bell',act:()=>addAlert(d.a.p)},'-',
     {label:'Clone',icon:'clone',act:()=>cloneDrawing(d)},
     {label:'Copy',icon:'copy',key:MOD+'C',act:()=>copyDrawing(d)},'-',
-    {label:d.locked?'Unlock':'Lock',icon:d.locked?'unlock':'lock',act:()=>{d.locked=!d.locked;saveDraw();toast(`${DNAME[d.type]||'Drawing'} ${d.locked?'locked':'unlocked'}`);draw()}},
+    {label:d.locked?'Unlock':'Lock',icon:d.locked?'unlock':'lock',act:()=>toggleLock(d)},
     {label:'Visual order',icon:'order',sub:[{label:'Bring to front',disabled:j===l.length-1,act:()=>reorder(d,1)},{label:'Send to back',disabled:j<=0,act:()=>reorder(d,-1)}]},'-',
-    {label:'Remove',icon:'trash',key:'Del',act:()=>removeDrawing(d)}]}
+    {label:'Remove',icon:'trash',key:'Del',act:()=>removeDrawing(d)},'-',
+    {label:'Settings…',icon:'gear',act:()=>openDrawSettings(d)}]}
 function studyMenu(st,inPane){
   return[{label:'Settings…',icon:'gear',act:()=>openSettings(st)},
     st.id==='script'&&{label:'Edit script',icon:'code',act:()=>{openPanel('editor');selectScript(st.sid)}},
@@ -1526,7 +1653,7 @@ wrap.addEventListener('contextmenu',e=>{
   e.preventDefault();if(lastPT==='touch')return;            // on touch, a long press opens the menu instead
   const row=e.target.closest('.lrow[data-uid]');
   if(row){const st=S.studies.find(s=>s.uid===row.dataset.uid);if(st)openMenu(studyMenu(st,false),e.clientX,e.clientY);return}
-  if(e.target.closest('.mkpop,.rp'))return;
+  if(e.target.closest('.mkpop,.rp,.dtb'))return;
   const r=cv.getBoundingClientRect();chartMenu({x:e.clientX-r.left,y:e.clientY-r.top},e.clientX,e.clientY)});
 /* touch: press and hold the chart for the same menu */
 wrap.addEventListener('pointerdown',e=>{lastPT=e.pointerType||'mouse'},true);
@@ -1556,6 +1683,125 @@ $('#csOk').addEventListener('click',()=>{const C=pal(),col=(id,d)=>{const x=$(id
   applyTheme();$('#csM').classList.remove('open');legendValues();draw()});
 $('#csDef').addEventListener('click',()=>openChartSettings(Object.assign({},CS_DEF,{log:false,inv:false})));
 applyTheme();
+/* ---------- floating toolbar and settings for the selected drawing (TradingView-style) ---------- */
+const PALETTE=['#ffffff','#d1d4dc','#b2b5be','#9598a1','#787b86','#5d606b','#434651','#2a2e39','#131722','#000000',
+  '#f23645','#ff9800','#ffeb3b','#4caf50','#089981','#00bcd4','#2962ff','#673ab7','#9c27b0','#e91e63',
+  '#fccbcd','#ffe0b2','#fff9c4','#c8e6c9','#ace5dc','#b2ebf2','#bbd9fb','#d1c4e9','#e1bee7','#f8bbd0'];
+const FILLY=new Set(Object.keys(FILLED)),ALERTY=new Set(['hline','hray','cross','plabel']),EXTY=new Set(['trend','info']);
+const DASH=[['solid','Solid'],['dashed','Dashed'],['dotted','Dotted']],LWS=[1,2,3,4],FSZ=[10,11,12,14,16,20,24,28,32,40];
+const defCol=d=>d.color||(d.type==='markup'?pal().up:d.type==='markdn'?pal().dn:pal().acc);
+const dashSvg=st=>`<svg width="22" height="16" viewBox="0 0 22 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 8h18"${st==='dashed'?' stroke-dasharray="5 3"':st==='dotted'?' stroke-dasharray="0.1 4"':''}/></svg>`;
+function setProp(d,k,v){pushHist();if(v==null)delete d[k];else d[k]=v;saveDraw();draw()}
+function toggleLock(d){d.locked=!d.locked;saveDraw();toast(`${DNAME[d.type]||'Drawing'} ${d.locked?'locked':'unlocked'}`);draw()}
+const dib=(a,title,inner,extra='')=>`<button type="button" data-a="${a}" title="${title}" aria-label="${title}"${extra}>${inner}</button>`;
+function dtbHtml(d){const T=d.type,col=defCol(d),p=[`<span class="dtbg" data-a="grip" title="Drag to move this toolbar">${svgI('grip')}</span>`];
+  if(COLORABLE.has(T))p.push(dib('col',T==='text'?'Text colour':'Colour',`${svgI(T==='text'?'text':'pen')}<i style="background:${col}"></i>`,' class="dtbc" aria-haspopup="menu"'));
+  if(FILLY.has(T))p.push(dib('bg','Background',`${svgI('bucket')}<i style="background:${alpha(d.bg||col,Math.max(.25,d.bgOp??FILLED[T]))}"></i>`,' class="dtbc" aria-haspopup="menu"'));
+  if(LINEY.has(T))p.push(dib('lw','Line width',`<span class="dtbn">${lwOf(d)}px</span>`,' aria-haspopup="menu"'),dib('ls','Line style',dashSvg(d.style),' aria-haspopup="menu"'));
+  if(T==='text')p.push(dib('fs','Font size',`<span class="dtbn">${d.fs||14}</span>`,' aria-haspopup="menu"'));
+  p.push('<span class="dtbs"></span>',dib('set','Settings',svgI('gear')));
+  if(ALERTY.has(T))p.push(dib('alert',`Add alert at ${fp(d.a.p)}`,svgI('bell')));
+  p.push(dib('lock',d.locked?'Unlock':'Lock',svgI(d.locked?'lock':'unlock'),` aria-pressed="${!!d.locked}"`),dib('del','Remove',svgI('trash')),dib('more','More',svgI('dots'),' aria-haspopup="menu"'));
+  return p.join('')}
+let dtbKey='';
+function syncDtb(){const el=$('#dtb'),d=S.sel;
+  const show=d&&!S.hideDraw&&!S.pending&&S.tool!=='eraser'&&(S.draw[S.sym]||[]).includes(d);
+  if(!show){if(!el.hidden){el.hidden=true;dtbKey=''}return}
+  const k=JSON.stringify([d.type,d.color,d.bg,d.bgOp,d.width,d.style,d.fs,d.locked,d.type==='text'?0:d.a.p]);
+  if(k!==dtbKey||el.hidden){dtbKey=k;el.innerHTML=dtbHtml(d);el.hidden=false}
+  placeDtb()}
+function placeDtb(){const el=$('#dtb');if(el.hidden||!L)return;const W=wrap.clientWidth,H=wrap.clientHeight,w=el.offsetWidth,h=el.offsetHeight,p=S.dtbPos;
+  let x,y;if(p){x=p.x*W;y=p.y}else if(W<700){x=(L.pw-w)/2;y=L.mainH-h-12}else{x=L.pw-w-12;y=10}
+  el.style.left=Math.round(Math.max(4,Math.min(W-w-4,x)))+'px';el.style.top=Math.round(Math.max(4,Math.min(H-h-4,y)))+'px'}
+addEventListener('resize',()=>placeDtb());
+let DTBD=null;
+$('#dtb').addEventListener('pointerdown',e=>{e.stopPropagation();const g=e.target.closest('[data-a="grip"]');if(!g)return;e.preventDefault();
+  const r=$('#dtb').getBoundingClientRect();DTBD={id:e.pointerId,dx:e.clientX-r.left,dy:e.clientY-r.top,wr:wrap.getBoundingClientRect()};$('#dtb').classList.add('drag')});
+addEventListener('pointermove',e=>{if(!DTBD||e.pointerId!==DTBD.id)return;const W=wrap.clientWidth||1;
+  S.dtbPos={x:Math.max(0,Math.min(1,(e.clientX-DTBD.wr.left-DTBD.dx)/W)),y:Math.max(0,Math.round(e.clientY-DTBD.wr.top-DTBD.dy))};placeDtb()});
+const dtbUp=e=>{if(!DTBD||e.pointerId!==DTBD.id)return;DTBD=null;$('#dtb').classList.remove('drag');if(S.dtbPos)store.set('dtbPos',S.dtbPos)};
+addEventListener('pointerup',dtbUp);addEventListener('pointercancel',dtbUp);
+$('#dtb').addEventListener('dblclick',e=>{if(e.target.closest('[data-a="grip"]')){S.dtbPos=null;store.set('dtbPos',null);placeDtb()}});   // double-click the grip: back to its usual place
+$('#dtb').addEventListener('contextmenu',e=>{e.preventDefault();e.stopPropagation()});
+const below=b=>{const r=b.getBoundingClientRect();return{left:r.left,right:r.right,top:r.top,bottom:r.bottom,below:true}};
+$('#dtb').addEventListener('click',e=>{const b=e.target.closest('button[data-a]'),d=S.sel;if(!b||!d)return;const a=b.dataset.a,o='dtb:'+a;
+  if((b.getAttribute('aria-haspopup'))&&menuJustClosed(o))return;   // a second click on the same button closes its menu
+  if(a==='col'||a==='bg')colourMenu(d,a==='bg'?'bg':'color',b);
+  else if(a==='lw')openMenu(LWS.map(n=>({label:n+'px',check:lwOf(d)===n,act:()=>setProp(d,'width',n)})),0,0,0,below(b),o);
+  else if(a==='ls')openMenu(DASH.map(([k,l])=>({label:l,check:(d.style||'solid')===k,act:()=>setProp(d,'style',k==='solid'?null:k)})),0,0,0,below(b),o);
+  else if(a==='fs')openMenu(FSZ.map(n=>({label:String(n),check:(d.fs||14)===n,act:()=>setProp(d,'fs',n===14?null:n)})),0,0,0,below(b),o);
+  else if(a==='set')openDrawSettings(d);
+  else if(a==='alert')addAlert(d.a.p);
+  else if(a==='lock')toggleLock(d);
+  else if(a==='del')removeDrawing(d);
+  else if(a==='more')openMenu(drawMenu(d).filter(i=>!(i&&i.swatches)),0,0,0,below(b),o)});
+function colourMenu(d,w,el){const o='dtb:'+(w==='bg'?'bg':'col'),cur=w==='bg'?(d.bg||defCol(d)):defCol(d);
+  const items=[{swatches:PALETTE,wide:true,on:hex(cur).toLowerCase(),pick:c=>setProp(d,w,c)},{label:'Custom colour…',icon:'plus',act:()=>pickCustom(d,w,el)}];
+  if(w==='bg')items.push('-',{range:{label:'Opacity',min:0,max:100,step:5,unit:'%',value:Math.round((d.bgOp??FILLED[d.type]??.12)*100)},start:()=>pushHist(),on:v=>{d.bgOp=v/100;saveDraw();draw()}});
+  openMenu(items,0,0,0,below(el),o)}
+function pickCustom(d,w,el){const inp=$('#dtbCol'),r=el&&el.isConnected?el.getBoundingClientRect():{left:innerWidth/2,bottom:innerHeight/2};
+  inp.style.left=Math.round(r.left)+'px';inp.style.top=Math.round(r.bottom)+'px';inp.value=hex(w==='bg'?(d.bg||defCol(d)):defCol(d));let pushed=false;
+  inp.oninput=inp.onchange=()=>{if(!pushed){pushHist();pushed=true}d[w]=inp.value;saveDraw();draw()};
+  try{if(inp.showPicker)inp.showPicker();else inp.click()}catch(_){inp.click()}}
+
+/* settings dialog: Style, Text and Coordinates */
+let DS=null;
+const dtl=t=>{const x=new Date(t);return isFinite(x)?x.toISOString().slice(0,16):''};   // times are UTC, like the chart
+function openDrawSettings(d){if(!d)return;DS=d;closeMenu();const T=d.type,col=hex(defCol(d)).toLowerCase();
+  const fld=(lab,id,html,full)=>`<label for="${id}"${full?' style="grid-column:1/-1"':''}>${lab}</label>${html}`;
+  const colI=(id,v,lab)=>`<div class="pc"><input type="color" id="${id}" value="${v}" data-v="${v}" aria-label="${lab}"></div>`;
+  const sel=(id,opts,cur)=>`<select id="${id}" data-v="${cur}">${opts.map(([k,l])=>`<option value="${k}"${String(k)===String(cur)?' selected':''}>${l}</option>`).join('')}</select>`;
+  const ck=(id,on)=>`<div class="pc"><input type="checkbox" id="${id}"${on?' checked':''} data-v="${!!on}"></div>`;
+  const num=(id,v)=>`<input type="number" step="any" id="${id}" value="${v}" data-v="${v}">`,tim=(id,t)=>`<input type="datetime-local" step="60" id="${id}" value="${dtl(t)}" data-v="${dtl(t)}">`;
+  let st='';
+  if(COLORABLE.has(T)&&T!=='text')st+=fld('Colour','dsCol',colI('dsCol',col,'Colour'));
+  if(LINEY.has(T)){const w=lwOf(d),ws=[...new Set([...LWS,1.5,w])].sort((a,b)=>a-b);st+=fld('Line width','dsW',sel('dsW',ws.map(n=>[n,n+'px']),w))+fld('Line style','dsSt',sel('dsSt',DASH,d.style||'solid'))}
+  if(FILLY.has(T)){const bg=hex(d.bg||defCol(d)).toLowerCase(),op=Math.round((d.bgOp??FILLED[T])*100);st+=fld('Background','dsBg',colI('dsBg',bg,'Background colour'))+fld('Background opacity (%)','dsOp',`<input type="number" id="dsOp" min="0" max="100" step="5" value="${op}" data-v="${op}">`)}
+  if(EXTY.has(T))st+=fld('Extend left','dsExL',ck('dsExL',d.extL))+fld('Extend right','dsExR',ck('dsExR',d.extR));
+  if(T==='fib'||T==='fibext'){const v=fibLv(d).join(', ');st+=fld('Levels (comma separated)','dsLv',`<input type="text" id="dsLv" value="${v}" data-v="${v}" inputmode="decimal">`)}
+  let tx='';
+  if(T==='text'){tx=fld('Text','dsTx',`<textarea id="dsTx" rows="3" data-v="${esc(d.text||'')}">${esc(d.text||'')}</textarea>`,true)+fld('Colour','dsCol',colI('dsCol',col,'Text colour'))+
+    fld('Font size','dsFs',sel('dsFs',FSZ.map(n=>[n,n]),d.fs||14))+fld('Bold','dsB',ck('dsB',d.bold!==false))}
+  let co='';const P=(k,n)=>fld(`Price${n?' '+n:''}`,`ds_${k}_p`,num(`ds_${k}_p`,plainP(d[k].p))),Tm=(k,n)=>fld(`Time${n?' '+n:''} (UTC)`,`ds_${k}_t`,tim(`ds_${k}_t`,d[k].t));
+  if(T==='hline')co=P('a','');else if(T==='vline')co=Tm('a','');
+  else if(T==='long'||T==='short')co=fld('Entry price','ds_a_p',num('ds_a_p',plainP(d.a.p)))+fld('Target price','ds_b_p',num('ds_b_p',plainP(d.b.p)))+fld('Stop price','ds_c_p',num('ds_c_p',plainP(d.c.p)))+
+    fld('Start time (UTC)','ds_a_t',tim('ds_a_t',d.a.t))+fld('End time (UTC)','ds_b_t',tim('ds_b_t',d.b.t));
+  else{const ks=handles(d),one=ks.length===1;for(const [j,k] of ks.entries())co+=P(k,one?'':'#'+(j+1))+Tm(k,one?'':'#'+(j+1))}
+  const tabs=[st&&['style','Style',st],tx&&['text','Text',tx],['coords','Coordinates',co]].filter(Boolean);
+  $('#dsT').textContent=DNAME[T]||'Drawing';
+  $('#dsTabs').innerHTML=tabs.map(([k,l],j)=>`<button type="button" role="tab" data-tab="${k}" aria-selected="${!j}" class="${j?'':'on'}">${l}</button>`).join('');
+  $('#dsF').innerHTML=tabs.map(([k,,h],j)=>`<div class="dsp${j?' off':''}" data-p="${k}" role="tabpanel">${h}</div>`).join('');
+  $('#dsM').classList.add('open');setTimeout(()=>{const f=$('#dsF .dsp:not(.off) input,#dsF .dsp:not(.off) textarea,#dsF .dsp:not(.off) select');if(f)f.focus({preventScroll:true})},30)}
+function dsTab(k){$$('#dsTabs [data-tab]').forEach(b=>{const on=b.dataset.tab===k;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});$$('#dsF .dsp').forEach(p=>p.classList.toggle('off',p.dataset.p!==k))}
+$('#dsTabs').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)dsTab(b.dataset.tab)});
+const dsClose=()=>{$('#dsM').classList.remove('open');DS=null;if($('#dsM').contains(document.activeElement))document.activeElement.blur()};   // so chart shortcuts work again straight away
+$('#dsF').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.target.matches('textarea')){e.preventDefault();$('#dsOk').click()}else if(e.key==='Escape'){e.preventDefault();dsClose()}});
+$('#dsOk').addEventListener('click',()=>{const d=DS,close=dsClose;
+  if(!d||!(S.draw[S.sym]||[]).includes(d))return close();
+  const ch=[...$$('#dsF [data-v]')].filter(i=>(i.type==='checkbox'?String(i.checked):i.value)!==i.dataset.v);
+  if(!ch.length)return close();
+  const up={};
+  for(const i of ch){const id=i.id,v=i.value;let m;
+    if((m=id.match(/^ds_([abc])_p$/))){if(v.trim()===''||!isFinite(+v))return toast('Enter a number for each price');(up.pts=up.pts||[]).push([m[1],'p',+v])}
+    else if((m=id.match(/^ds_([abc])_t$/))){const t=Date.parse(v+'Z');if(!isFinite(t))return toast('Enter a date and time for each point');(up.pts=up.pts||[]).push([m[1],'t',t])}
+    else if(id==='dsLv'){const lv=[...new Set(v.split(/[,;\s]+/).filter(Boolean).map(Number))];if(!lv.length||lv.some(x=>!isFinite(x)))return toast('Levels must be numbers, like 0, 0.5, 1');up.levels=lv.sort((a,b)=>a-b)}
+    else if(id==='dsTx'){if(!v.trim())return toast('The note needs some text');up.text=v.replace(/\s+$/,'')}
+    else if(id==='dsOp'){if(v.trim()===''||!isFinite(+v))return toast('Opacity is a number from 0 to 100');up.bgOp=Math.max(0,Math.min(100,+v))/100}
+    else up[id]=i.type==='checkbox'?i.checked:v}
+  pushHist();
+  if('dsCol' in up)d.color=up.dsCol;
+  if('dsW' in up){if(+up.dsW===1.5)delete d.width;else d.width=+up.dsW}
+  if('dsSt' in up){if(up.dsSt==='solid')delete d.style;else d.style=up.dsSt}
+  if('dsBg' in up)d.bg=up.dsBg;
+  if('bgOp' in up)d.bgOp=up.bgOp;
+  if('dsExL' in up){if(up.dsExL)d.extL=true;else delete d.extL}
+  if('dsExR' in up){if(up.dsExR)d.extR=true;else delete d.extR}
+  if('levels' in up){const def=d.type==='fib'?FIB:FIBX;if(up.levels.join()===def.join())delete d.levels;else d.levels=up.levels}
+  if('text' in up)d.text=up.text;
+  if('dsFs' in up){if(+up.dsFs===14)delete d.fs;else d.fs=+up.dsFs}
+  if('dsB' in up){if(up.dsB)delete d.bold;else d.bold=false}
+  for(const [k,f,v] of up.pts||[]){d[k]={...d[k],[f]:v};if(f==='t'&&k==='b'&&(d.type==='long'||d.type==='short'))d.c={...d.c,t:v}}
+  saveDraw();close();draw()});
 document.addEventListener('keydown',e=>{
   if(e.target.matches('input,textarea,select'))return;
   const k=e.key.toLowerCase();
@@ -1565,9 +1811,12 @@ document.addEventListener('keydown',e=>{
   else if((e.ctrlKey||e.metaKey)&&k==='c'&&S.sel)copyDrawing(S.sel);
   else if((e.ctrlKey||e.metaKey)&&k==='v'&&S.clip){e.preventDefault();pasteDrawing()}
   // Alt shortcuts read the physical key (e.code) so they also work on a Mac, where Alt+letter types a symbol
-  else if(e.altKey&&e.code==='KeyT'){S.tool='trend';renderRail()}
-  else if(e.altKey&&e.code==='KeyH'){e.preventDefault();const mp=mainPt();if(mp)addHLine(mp.p,mp.t);else{S.tool='hline';renderRail()}}
-  else if(e.altKey&&e.code==='KeyV'){S.tool='vline';renderRail()}else if(e.altKey&&e.code==='KeyF'){S.tool='fib';renderRail()}
+  else if(e.altKey&&e.code==='KeyT')setTool('trend');
+  else if(e.altKey&&e.code==='KeyH'){e.preventDefault();const mp=mainPt();if(mp)addHLine(mp.p,mp.t);else setTool('hline')}
+  else if(e.altKey&&e.code==='KeyJ'){e.preventDefault();setTool('hray')}
+  else if(e.altKey&&e.code==='KeyC'){e.preventDefault();setTool('cross')}
+  else if(e.altKey&&e.code==='KeyV')setTool('vline');else if(e.altKey&&e.code==='KeyF')setTool('fib');
+  else if(e.altKey&&e.shiftKey&&e.code==='KeyR'){e.preventDefault();setTool('rect')}
   else if(e.altKey&&e.code==='KeyR'){e.preventDefault();resetView()}
   else if(e.altKey&&e.code==='KeyA'){e.preventDefault();const mp=mainPt();addAlert(mp?mp.p:S.base[S.base.length-1]?.c)}
   else if(e.altKey&&e.code==='KeyL'){e.preventDefault();toggleLog()}
